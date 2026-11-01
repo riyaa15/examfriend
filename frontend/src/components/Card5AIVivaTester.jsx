@@ -412,21 +412,21 @@ export default function Card5AIVivaTester({ sessions, onRefresh, token }) {
             </div>
           )}
 
-          {/* Upload Notes PDF */}
+          {/* Upload Notes File */}
           <div className="form-group">
             <label className="form-label">
-              <Upload size={15} /> Upload Your Study Notes (PDF) *
+              <Upload size={15} /> Upload Your Study Notes (PDF, Photo, ZIP, Word, Text) *
             </label>
             <input
               type="file"
               required
-              accept=".pdf"
+              accept=".pdf,.zip,.png,.jpg,.jpeg,.webp,.txt,.doc,.docx,.md,*"
               className="form-input"
               style={{ padding: '0.5rem' }}
               onChange={(e) => setNotesFile(e.target.files[0] || null)}
             />
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              The AI professor will read your notes and test you like a genuine university viva examiner!
+              Supports PDFs, photos of notebook pages, ZIP archives, Word docs, and text files. The AI professor reads your material and tests you!
             </p>
           </div>
 

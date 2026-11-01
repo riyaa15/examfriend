@@ -428,17 +428,17 @@ export default function Card2SubjectTracker({ subjects, onRefresh, token }) {
           {inputMode === 'pdf' ? (
             <div className="form-group" style={{ marginBottom: '1.25rem' }}>
               <label className="form-label" style={{ fontWeight: 600 }}>
-                Select Syllabus PDF File
+                Upload Syllabus File (PDF, Photo, ZIP, Word, Text)
               </label>
               <input
                 type="file"
-                accept=".pdf"
+                accept=".pdf,.zip,.png,.jpg,.jpeg,.webp,.txt,.doc,.docx,.md,*"
                 className="form-input"
                 style={{ padding: '0.65rem' }}
                 onChange={(e) => setSyllabusFile(e.target.files[0] || null)}
               />
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-                💡 Supports digital PDFs and scanned pages. Our engine scans through and splits all comma-separated concepts into granular topics!
+                💡 Supports digital & scanned PDFs, photos of syllabus pages, ZIP archives, Word docs and text files. All concepts are automatically extracted into a granular checklist!
               </p>
             </div>
           ) : (
@@ -550,7 +550,7 @@ export default function Card2SubjectTracker({ subjects, onRefresh, token }) {
           </div>
         ) : (
           subjects.map((sub) => {
-            const isExpanded = expandedSubjects[sub.id] !== false; // expanded by default
+            const isExpanded = !!expandedSubjects[sub.id]; // hidden by default until user clicks "View Modules"
             const pct = sub.completion_percentage || 0;
             
             // Progress Ring calculation
@@ -640,7 +640,7 @@ export default function Card2SubjectTracker({ subjects, onRefresh, token }) {
                       {isExpanded ? (
                         <><ChevronUp size={15} /> Hide Modules</>
                       ) : (
-                        <><ChevronDown size={15} /> View Syllabus ({sub.modules?.length} Units)</>
+                        <><ChevronDown size={15} /> View Modules ({sub.modules?.length} Units)</>
                       )}
                     </button>
                     <button

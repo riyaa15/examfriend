@@ -729,10 +729,10 @@ export default function Card6AITeacher({ token, onBack, onNavigate, onRefresh })
                 </div>
               </div>
 
-              {/* Optional Topic PDF Upload */}
+              {/* Optional Topic File Upload */}
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Reference Notes / Slides PDF</span>
+                  <span>Reference Notes / Material (PDF, Photo, ZIP, Word, Text)</span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Optional)</span>
                 </label>
                 <div style={{
@@ -746,7 +746,7 @@ export default function Card6AITeacher({ token, onBack, onNavigate, onRefresh })
                 }}>
                   <input
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.zip,.png,.jpg,.jpeg,.webp,.txt,.doc,.docx,.md,*"
                     onChange={(e) => setSelectedFile(e.target.files[0] || null)}
                     disabled={loading}
                     style={{
@@ -761,10 +761,10 @@ export default function Card6AITeacher({ token, onBack, onNavigate, onRefresh })
                   />
                   <Upload size={22} color="var(--primary)" style={{ margin: '0 auto 0.4rem' }} />
                   <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                    {selectedFile ? selectedFile.name : 'Upload Topic PDF / Scanned Notes'}
+                    {selectedFile ? selectedFile.name : 'Upload File (PDF, Photo, ZIP, Word, Text)'}
                   </div>
                   <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                    {selectedFile ? `${Math.round(selectedFile.size / 1024)} KB` : 'RapidOCR automatically parses handwritten & textbook pages'}
+                    {selectedFile ? `${Math.round(selectedFile.size / 1024)} KB` : 'RapidOCR automatically extracts textbook pages, photos & handwritten notes'}
                   </div>
                 </div>
               </div>

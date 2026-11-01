@@ -138,53 +138,100 @@ Return strictly valid JSON conforming to this schema with NO outside markdown:
     return fallback_parse_syllabus(cleaned_text if cleaned_text else syllabus_text, subject_name, target_mods)
 
 def fallback_parse_syllabus(text: str, subject_name: str, num_modules: int = 5) -> Dict[str, Any]:
-    """Exhaustive heuristic parser extracting every single distinct topic and subtopic."""
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    """Exhaustive heuristic parser extracting every single distinct topic and subtopic without discarding real syllabus text."""
+    if not text or len(text.strip()) < 10:
+        target_mods = max(1, num_modules)
+        default_topics_per_module = {
+            1: [f"Introduction & Fundamentals of {subject_name}", f"Core Terminology & Concepts", f"Foundational Principles", f"Basic Architecture & Overview", f"Unit 1 Practice Problems"],
+            2: [f"Core Methodologies in {subject_name}", f"Processes & Workflows", f"Standard Models & Techniques", f"Detailed Analysis", f"Unit 2 Practical Examples"],
+            3: [f"Advanced Concepts & Implementations", f"System Integrations & Protocols", f"Performance & Optimization", f"Design Patterns", f"Unit 3 Review & Proofs"],
+            4: [f"Critical Applications & Testing", f"Security, Validation & Edge Cases", f"Comparative Analysis", f"Case Studies & Industry Scenarios", f"Unit 4 Exercise Solutions"],
+            5: [f"Recent Advancements & Trends in {subject_name}", f"Comprehensive Exam Review", f"Important Theorems & Formulas", f"High-Yield University Exam Questions", f"Final Preparation Checklist"]
+        }
+        built_modules = []
+        for i in range(1, target_mods + 1):
+            built_modules.append({
+                "module_number": i,
+                "module_title": f"Module {i}: {subject_name} Unit {i}",
+                "topics": default_topics_per_module.get(i, [f"Key Concept {i}.1", f"Key Concept {i}.2", f"Key Concept {i}.3", f"Key Concept {i}.4"])
+            })
+        return {"modules": built_modules}
+
+    raw_lines = [line.strip() for line in text.split("\n") if line.strip()]
     modules = []
     
     current_module_title = None
     current_topics = []
     
-    module_pattern = re.compile(
+    module_header_regex = re.compile(
         r"^(?:Module|Unit|Chapter|Section|Part)\s*[-:]?\s*([0-9IVXLCDM]+)?[\s:\-]*(.*)$", 
         re.IGNORECASE
     )
 
+    stop_phrases = (
+        "text book", "textbook", "reference book", "references", 
+        "suggested reading", "course outcomes", "evaluation scheme",
+        "question paper pattern", "co-po mapping", "regulations", "scheme of examination"
+    )
+
     ignore_phrases = (
-        "course code", "credits", "total hours", "prerequisite", "course outcomes",
-        "co-po mapping", "textbooks:", "reference books:", "evaluation scheme",
-        "syllabus for", "university of", "department of", "semester", "regulations"
+        "course code", "credits", "total hours", "prerequisite", "hours/week",
+        "syllabus for", "university of", "department of", "semester", "page "
     )
     
-    for line in lines:
+    in_stop_section = False
+    all_extracted_topics = []
+
+    for idx, line in enumerate(raw_lines):
         lower_line = line.lower()
+        
+        # Once reference books / evaluation scheme begins, stop ingesting non-syllabus lines
+        if any(lower_line.startswith(p) for p in stop_phrases):
+            in_stop_section = True
+            continue
+
+        if in_stop_section:
+            # Check if another explicit unit header restarts the syllabus
+            if module_header_regex.match(line):
+                in_stop_section = False
+            else:
+                continue
+
         if any(lower_line.startswith(p) for p in ignore_phrases):
             continue
 
-        match = module_pattern.match(line)
-        if match and len(line) < 140:
+        match = module_header_regex.match(line)
+        if match and len(line) < 160:
             if current_module_title:
                 modules.append({
                     "module_number": len(modules) + 1,
                     "module_title": current_module_title,
-                    "topics": current_topics if len(current_topics) >= 2 else current_topics + [f"{current_module_title} Practical Principles", f"{current_module_title} Review & Problems"]
+                    "topics": current_topics if len(current_topics) >= 1 else [f"{current_module_title} Core Principles", f"{current_module_title} Key Formulations"]
                 })
                 current_topics = []
-            title = match.group(2).strip() or f"Module {len(modules) + 1}"
-            title = re.sub(r"^[-:\s]+", "", title)
-            current_module_title = title if title else f"Module {len(modules) + 1}"
+
+            unit_tag = match.group(1) or str(len(modules) + 1)
+            rest_of_title = match.group(2).strip()
+            rest_of_title = re.sub(r"^[-:\s]+", "", rest_of_title)
+
+            if not rest_of_title and idx + 1 < len(raw_lines):
+                # Try next line as title if it doesn't look like another module
+                next_l = raw_lines[idx + 1].strip()
+                if not module_header_regex.match(next_l) and len(next_l) < 100:
+                    rest_of_title = next_l
+
+            current_module_title = f"Unit {unit_tag}: {rest_of_title}" if rest_of_title else f"Unit {unit_tag}"
         else:
-            # Split compound lines by comma, semicolon, bullet, dash, or colon
-            # to extract EVERY subtopic
+            # Split compound lines by commas, semicolons, bullets, colons
             raw_parts = re.split(r"[,;•\-\*|\n]|\b(?:and also|as well as)\b", line)
             for p in raw_parts:
                 clean_p = p.strip()
-                # Remove leading numbers/bullets like "1.", "a)", "(i)"
                 clean_p = re.sub(r"^(?:[0-9]+[\.\)]|\([0-9a-zivx]+\)|[a-z][\.\)])\s*", "", clean_p, flags=re.IGNORECASE).strip()
                 if 3 < len(clean_p) < 130:
-                    if clean_p.lower() not in [t.lower() for t in current_topics]:
-                        if not any(clean_p.lower().startswith(p) for p in ignore_phrases):
+                    if clean_p.lower() not in [t.lower() for t in current_topics] and clean_p.lower() not in [t.lower() for t in all_extracted_topics]:
+                        if not any(clean_p.lower().startswith(p) for p in ignore_phrases) and not any(clean_p.lower().startswith(p) for p in stop_phrases):
                             current_topics.append(clean_p)
+                            all_extracted_topics.append(clean_p)
 
     if current_module_title:
         modules.append({
@@ -193,94 +240,45 @@ def fallback_parse_syllabus(text: str, subject_name: str, num_modules: int = 5) 
             "topics": current_topics if current_topics else [f"{current_module_title} Key Principles", f"{current_module_title} Core Applications"]
         })
 
-    # If heuristic didn't detect module headers, build balanced exhaustive modules
+    # If modules were detected, KEEP THEM! Never overwrite with dummy topics!
+    if len(modules) >= 1:
+        return {"modules": modules}
+
+    # If no explicit Unit/Module headers were detected, chunk the REAL extracted topics into target modules
     target_mods = max(1, num_modules)
-    if len(modules) < target_mods:
-        if len(current_topics) >= target_mods * 3:
-            # Distribute detected topics across target modules
-            chunk = len(current_topics) // target_mods
-            built_mods = []
-            for i in range(target_mods):
-                m_tops = current_topics[i * chunk : (i + 1) * chunk if i < target_mods - 1 else len(current_topics)]
-                built_mods.append({
-                    "module_number": i + 1,
-                    "module_title": f"Module {i+1}: {subject_name} Section {i+1}",
-                    "topics": m_tops if m_tops else [f"{subject_name} Foundation Concept {i+1}"]
-                })
-            return {"modules": built_mods}
-        else:
-            # Generate detailed academic curriculum topics tailored to the subject
-            default_topics_per_module = {
-                1: [
-                    f"Introduction & Fundamentals of {subject_name}",
-                    f"Core Terminology, Architecture & System Models",
-                    f"Mathematical Foundations & Governing Equations",
-                    f"Historical Evolution & Standards",
-                    f"Primitive Data Structures / Base Components",
-                    f"Operational Workflows & Process Lifecycles",
-                    f"Initial State Configurations & Setup",
-                    f"Module 1 Key Review & Practice Exercises"
-                ],
-                2: [
-                    f"Primary Algorithms & Computational Methods",
-                    f"Detailed Data Flow, Signals & Transformations",
-                    f"Performance Metrics, Latency & Throughput",
-                    f"Resource Allocation & Scheduling Strategies",
-                    f"Control Flow & State Machine Dynamics",
-                    f"Internal Mechanism Derivations & Proofs",
-                    f"Handling Edge Cases & Boundary Conditions",
-                    f"Module 2 Benchmark Analysis & Worked Examples"
-                ],
-                3: [
-                    f"Advanced Architecture & Multi-Layer Integration",
-                    f"Synchronization, Concurrency & Locking",
-                    f"Error Detection, Recovery & Fault Tolerance",
-                    f"Communication Protocols & Interfaces",
-                    f"Optimization Strategies & Caching",
-                    f"Hardware-Software Interface & Abstractions",
-                    f"Standard Implementation Patterns",
-                    f"Module 3 Case Studies & Numerical Problems"
-                ],
-                4: [
-                    f"Security, Validation & Integrity Verification",
-                    f"Scalability, Load Balancing & Clustering",
-                    f"Modern Frameworks, Tools & Libraries",
-                    f"System Monitoring, Diagnostics & Profiling",
-                    f"Real-World Production Architectures",
-                    f"Trade-Off Analysis (Time vs Space vs Cost)",
-                    f"Comparative Evaluation with Modern Alternatives",
-                    f"Module 4 Comprehensive Problem Sets"
-                ],
-                5: [
-                    f"Cutting-Edge Innovations & Research Trends",
-                    f"End-to-End System Design & Implementation",
-                    f"Testing Methodologies & Verification Frameworks",
-                    f"Integration with Cloud / AI Ecosystems",
-                    f"Industry Case Studies & Real-World Deployments",
-                    f"Final Review: Critical Exam Theorems & Derivations",
-                    f"Formula Reference Sheet & Memory Anchors",
-                    f"University Past Exam Problem Walkthroughs"
-                ]
-            }
+    if len(all_extracted_topics) >= 1:
+        chunk_size = max(1, (len(all_extracted_topics) + target_mods - 1) // target_mods)
+        built_mods = []
+        for i in range(target_mods):
+            start_i = i * chunk_size
+            end_i = min(len(all_extracted_topics), (i + 1) * chunk_size)
+            m_tops = all_extracted_topics[start_i:end_i]
+            if not m_tops:
+                m_tops = [f"{subject_name} Unit {i+1} Core Concepts", f"{subject_name} Unit {i+1} Practice Review"]
+            first_top = m_tops[0] if m_tops else f"Unit {i+1}"
+            built_mods.append({
+                "module_number": i + 1,
+                "module_title": f"Module {i+1}: {first_top[:45]}",
+                "topics": m_tops
+            })
+        return {"modules": built_mods}
 
-            built_modules = []
-            for i in range(1, target_mods + 1):
-                m_topics = default_topics_per_module.get(i, [
-                    f"Specialized Concept {i}.1 in {subject_name}",
-                    f"Design Patterns & Methodologies {i}.2",
-                    f"Optimization & Performance Analysis {i}.3",
-                    f"Practical Case Study & Implementation {i}.4",
-                    f"Troubleshooting & Edge Cases {i}.5",
-                    f"Exam Practice & Review Problems {i}.6"
-                ])
-                built_modules.append({
-                    "module_number": i,
-                    "module_title": f"Module {i}: {subject_name} Core Unit {i}",
-                    "topics": m_topics
-                })
-            return {"modules": built_modules}
-
-    return {"modules": modules}
+    # Fallback to standard curriculum structure
+    default_topics_per_module = {
+        1: [f"Introduction & Fundamentals of {subject_name}", f"Core Terminology & Models", f"Basic Principles", f"Base Architecture", f"Unit 1 Practice Problems"],
+        2: [f"Core Methodologies in {subject_name}", f"Processes & Workflows", f"Standard Algorithms & Techniques", f"Detailed Analysis", f"Unit 2 Practical Examples"],
+        3: [f"Advanced Concepts & Implementations", f"System Integrations & Protocols", f"Performance & Optimization", f"Design Patterns", f"Unit 3 Review & Proofs"],
+        4: [f"Critical Applications & Testing", f"Security, Validation & Edge Cases", f"Comparative Analysis", f"Case Studies & Industry Scenarios", f"Unit 4 Exercise Solutions"],
+        5: [f"Recent Advancements & Trends in {subject_name}", f"Comprehensive Exam Review", f"Important Theorems & Formulas", f"High-Yield University Exam Questions", f"Final Preparation Checklist"]
+    }
+    built_modules = []
+    for i in range(1, target_mods + 1):
+        built_modules.append({
+            "module_number": i,
+            "module_title": f"Module {i}: {subject_name} Unit {i}",
+            "topics": default_topics_per_module.get(i, [f"Key Concept {i}.1", f"Key Concept {i}.2", f"Key Concept {i}.3"])
+        })
+    return {"modules": built_modules}
 
 def deep_expand_module_topics(subject_name: str, module_title: str, current_topics: List[str]) -> List[str]:
     """Generates an even more granular, comprehensive subtopic checklist for a specific module."""

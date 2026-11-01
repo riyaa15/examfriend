@@ -1018,7 +1018,7 @@ export default function Card8NotesMaker({ token, onBack, onNavigate, onRefresh }
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
-                accept=".pdf,image/*,.png,.jpg,.jpeg,.webp,.docx,.txt"
+                accept=".pdf,image/*,.png,.jpg,.jpeg,.webp,.docx,.txt,.zip,.doc,.md,*"
                 style={{ display: 'none' }}
               />
 

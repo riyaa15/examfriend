@@ -916,13 +916,13 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
                           }}>
                             {item.subject}
                           </span>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem' }}>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
-                              Topic:
-                            </span>
-                            <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>
-                              {item.topic}
-                            </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                              <b style={{ color: 'var(--primary)' }}>Topic 1:</b> {item.topic_1 || (getTopicPoints(item)[0] || item.topic)}
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                              <b style={{ color: 'var(--accent-cyan, #06b6d4)' }}>Topic 2:</b> {item.topic_2 || (getTopicPoints(item)[1] || 'Practice & Active Recall')}
+                            </div>
                           </div>
                         </div>
                         <span className="badge badge-primary" style={{ fontSize: '0.725rem' }}>
@@ -957,17 +957,18 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
                   <thead>
                     <tr style={{ background: 'var(--bg-subtle)', borderBottom: '2px solid var(--border-light)' }}>
-                      <th style={{ padding: '0.85rem 1rem', width: '95px' }}>Day</th>
-                      <th style={{ padding: '0.85rem 1rem', width: '150px' }}>Date</th>
-                      <th style={{ padding: '0.85rem 1rem' }}>Topic (According to Date)</th>
-                      <th style={{ padding: '0.85rem 1rem', width: '170px' }}>Subject</th>
-                      <th style={{ padding: '0.85rem 1rem', width: '110px' }}>Status</th>
+                      <th style={{ padding: '0.85rem 1rem', width: '85px' }}>Day</th>
+                      <th style={{ padding: '0.85rem 1rem', width: '140px' }}>Date</th>
+                      <th style={{ padding: '0.85rem 1rem', width: '160px' }}>Subject Name</th>
+                      <th style={{ padding: '0.85rem 1rem' }}>Topic 1 (Core Focus)</th>
+                      <th style={{ padding: '0.85rem 1rem' }}>Topic 2 (Practice & Depth)</th>
+                      <th style={{ padding: '0.85rem 1rem', width: '100px' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {planSchedule.length === 0 ? (
                       <tr>
-                        <td colSpan={5} style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        <td colSpan={6} style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                           No days generated for this plan.
                         </td>
                       </tr>
@@ -975,6 +976,9 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
                       planSchedule.map((item, idx) => {
                         const isHol = item.is_holiday;
                         const points = getTopicPoints(item);
+                        const t1 = item.topic_1 || points[0] || item.topic;
+                        const t2 = item.topic_2 || points[1] || (points.length > 1 ? points[1] : 'Practice Questions & Active Recall');
+
                         return (
                           <tr 
                             key={idx}
@@ -991,51 +995,19 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  width: '24px',
-                                  height: '24px',
-                                  borderRadius: '50%',
-                                  background: isHol
-                                    ? '#10b981'
-                                    : (idx === 0 ? 'var(--primary)' : 'rgba(99, 102, 241, 0.12)'),
-                                  color: (isHol || idx === 0) ? '#fff' : 'var(--primary)',
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: 'var(--radius-sm)',
+                                  background: isHol ? '#10b981' : 'var(--primary)',
+                                  color: '#fff',
                                   fontSize: '0.725rem',
                                   fontWeight: 800
                                 }}>
-                                  {idx + 1}
+                                  {item.day}
                                 </span>
-                                <span>{item.day}</span>
                               </div>
                             </td>
                             <td style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.85rem' }}>
                               {item.date}
-                            </td>
-                            <td style={{ padding: '0.85rem 1rem', color: 'var(--text-primary)' }}>
-                              {isHol ? (
-                                <span style={{ color: '#059669', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                                  🌴 Holiday / Rest Day &bull; No study scheduled
-                                </span>
-                              ) : (
-                                points.length <= 1 ? (
-                                  <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                                    {item.topic}
-                                  </span>
-                                ) : (
-                                  <ul style={{
-                                    margin: 0,
-                                    paddingLeft: '1.15rem',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '0.25rem',
-                                    listStyleType: 'disc'
-                                  }}>
-                                    {points.map((pt, pIdx) => (
-                                      <li key={pIdx} style={{ fontSize: '0.85rem', lineHeight: 1.4, color: 'var(--text-primary)', fontWeight: 600 }}>
-                                        {pt}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                )
-                              )}
                             </td>
                             <td style={{ padding: '0.85rem 1rem' }}>
                               <span style={{
@@ -1049,6 +1021,28 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
                               }}>
                                 {item.subject}
                               </span>
+                            </td>
+                            <td style={{ padding: '0.85rem 1rem', color: 'var(--text-primary)' }}>
+                              {isHol ? (
+                                <span style={{ color: '#059669', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  🌴 Rest & Recharge
+                                </span>
+                              ) : (
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  {t1}
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)' }}>
+                              {isHol ? (
+                                <span style={{ color: '#047857', fontSize: '0.85rem', fontStyle: 'italic' }}>
+                                  No study scheduled
+                                </span>
+                              ) : (
+                                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                                  {t2}
+                                </span>
+                              )}
                             </td>
                             <td style={{ padding: '0.85rem 1rem' }}>
                               {isHol ? (

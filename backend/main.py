@@ -385,8 +385,8 @@ async def create_subject(
             shutil.copyfileobj(file.file, buffer)
         saved_filename = file.filename
 
-        # Extract text from PDF
-        extracted_text = pdf_utils.extract_text_from_pdf(file_path)
+        # Extract text from PDF, Photo, ZIP, Word or Text file
+        extracted_text = pdf_utils.extract_text_from_file_or_photo(file_path)
     elif syllabus_text and syllabus_text.strip():
         extracted_text = syllabus_text.strip()
 
@@ -810,21 +810,24 @@ def generate_study_plan(
                 "topics": [fallback_top]
             }
 
-    # Build chronological days_schedule
+    # Build chronological days_schedule with sequential Day 1 to Day N study days
     days_schedule = []
-    for day_idx, curr_date in enumerate(all_dates, start=1):
+    study_day_counter = 1
+    for curr_date in all_dates:
         iso_str = curr_date.isoformat()
         date_formatted = curr_date.strftime("%d %b %Y (%a)")
 
         if iso_str in holiday_date_set:
             days_schedule.append({
-                "day": f"Day {day_idx}",
+                "day": "Holiday",
                 "date": date_formatted,
                 "date_iso": iso_str,
                 "is_holiday": True,
-                "subject": "Holiday",
+                "subject": "🌴 Holiday",
+                "topic_1": "Rest & Recharge",
+                "topic_2": "Optional Light Review (No Study Scheduled)",
                 "topic": "Holiday / Rest Day",
-                "topics": ["Holiday / Rest Day (No study scheduled)"],
+                "topics": ["Rest & Recharge (No study scheduled)"],
                 "completed": False
             })
         else:
@@ -833,16 +836,23 @@ def generate_study_plan(
                 "topic": "Topic Review & Practice",
                 "topics": ["Topic Review & Practice"]
             })
+            raw_top_list = assigned.get("topics", [])
+            t1 = raw_top_list[0] if len(raw_top_list) > 0 else assigned["topic"]
+            t2 = raw_top_list[1] if len(raw_top_list) > 1 else "Active Recall & Practice Problems"
+
             days_schedule.append({
-                "day": f"Day {day_idx}",
+                "day": f"Day {study_day_counter}",
                 "date": date_formatted,
                 "date_iso": iso_str,
                 "is_holiday": False,
                 "subject": assigned["subject"],
-                "topic": assigned["topic"],
-                "topics": assigned["topics"],
+                "topic_1": t1,
+                "topic_2": t2,
+                "topic": f"{t1} • {t2}",
+                "topics": [t1, t2],
                 "completed": False
             })
+            study_day_counter += 1
 
     # Save to Database
     pdf_filename = f"plan_{user.id}_{int(datetime.datetime.utcnow().timestamp())}.pdf"
@@ -951,16 +961,17 @@ async def generate_practice_papers(
     if not subject:
         raise HTTPException(status_code=404, detail="Selected subject not found")
 
-    # Save uploaded ZIP file
+    # Save uploaded file (supports ZIP, PDF, Photo, Word, Text)
     timestamp = int(datetime.datetime.utcnow().timestamp())
-    zip_path = os.path.join(UPLOAD_DIR, f"papers_{user.id}_{timestamp}.zip")
-    extract_folder = os.path.join(UPLOAD_DIR, f"extracted_{user.id}_{timestamp}")
+    orig_name = file.filename or f"papers_{timestamp}.zip"
+    safe_name = "".join(c for c in orig_name if c.isalnum() or c in ('.', '_', '-'))
+    uploaded_path = os.path.join(UPLOAD_DIR, f"papers_{user.id}_{timestamp}_{safe_name}")
     
-    with open(zip_path, "wb") as buffer:
+    with open(uploaded_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Extract all text from past question papers inside the ZIP
-    past_papers_text = pdf_utils.extract_papers_from_zip(zip_path, extract_folder)
+    # Extract all text from past question papers (ZIP, PDF, photo, docx, txt)
+    past_papers_text = pdf_utils.extract_text_from_file_or_photo(uploaded_path)
 
     # Gather known syllabus topics for this subject
     syllabus_topics = []
@@ -1053,8 +1064,8 @@ async def upload_viva_notes(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Extract text from notes PDF
-    notes_text = pdf_utils.extract_text_from_pdf(file_path)
+    # Extract text from notes (PDF, Photo, ZIP, Word, Text)
+    notes_text = pdf_utils.extract_text_from_file_or_photo(file_path)
 
     # Generate Viva Questions
     questions = ai_service.generate_viva_questions_from_notes(notes_text, mode=mode, count=5)
@@ -1159,7 +1170,7 @@ async def explain_topic(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         saved_filename = file.filename
-        extracted_text = pdf_utils.extract_text_from_pdf(file_path)
+        extracted_text = pdf_utils.extract_text_from_file_or_photo(file_path)
 
     lesson_data = ai_service.generate_ai_teacher_lesson(
         topic=topic.strip(),
@@ -1257,18 +1268,8 @@ async def generate_question_bank(
     with open(uploaded_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Extract text from the ZIP or single file
-    lower_name = saved_filename.lower()
-    if lower_name.endswith(".zip"):
-        all_papers_text = pdf_utils.extract_papers_from_zip(uploaded_path, extract_folder)
-    elif lower_name.endswith(".pdf"):
-        all_papers_text = pdf_utils.extract_text_from_pdf(uploaded_path)
-    else:
-        try:
-            with open(uploaded_path, "r", encoding="utf-8", errors="ignore") as f:
-                all_papers_text = f.read()
-        except Exception:
-            all_papers_text = ""
+    # Extract text from the ZIP, PDF, Photo, Word, or Text file
+    all_papers_text = pdf_utils.extract_text_from_file_or_photo(uploaded_path)
 
     # Generate deduplicated question bank
     bank_data = ai_service.generate_question_bank_from_papers(
@@ -2501,11 +2502,7 @@ def upload_drive_note_file(
 
     extracted_text = ""
     try:
-        if note_type in ["pdf", "image"]:
-            extracted_text = pdf_utils.extract_text_from_file_or_photo(saved_path)
-        elif note_type == "text":
-            with open(saved_path, "r", encoding="utf-8", errors="ignore") as f:
-                extracted_text = f.read()
+        extracted_text = pdf_utils.extract_text_from_file_or_photo(saved_path)
     except Exception as e:
         print(f"Error extracting text from uploaded drive file: {e}")
 

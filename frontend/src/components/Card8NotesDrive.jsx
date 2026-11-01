@@ -2613,7 +2613,7 @@ export default function Card8NotesDrive({ token, onBack, onNavigate, onRefresh }
                     ref={fileInputRef}
                     type="file"
                     style={{ display: 'none' }}
-                    accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.txt,.md,.ppt,.pptx"
+                    accept=".pdf,.zip,.png,.jpg,.jpeg,.webp,.doc,.docx,.txt,.md,.ppt,.pptx,*"
                     onChange={handleFileChange}
                   />
 
@@ -2898,12 +2898,12 @@ export default function Card8NotesDrive({ token, onBack, onNavigate, onRefresh }
                 {/* File Dropzone */}
                 <div>
                   <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.45rem' }}>
-                    Select PDF / Document File *
+                    Select File (PDF, Photo, ZIP, Word, PPT, Text) *
                   </label>
                   <input
                     type="file"
                     ref={modFileInputRef}
-                    accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+                    accept=".pdf,.zip,.png,.jpg,.jpeg,.webp,.doc,.docx,.ppt,.pptx,.txt,.md,*"
                     onChange={handleModuleFileChange}
                     style={{ display: 'none' }}
                   />

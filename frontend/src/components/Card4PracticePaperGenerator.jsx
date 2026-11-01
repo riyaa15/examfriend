@@ -192,18 +192,18 @@ export default function Card4PracticePaperGenerator({ subjects, papers, onRefres
 
           <div className="form-group" style={{ marginTop: '0.5rem' }}>
             <label className="form-label">
-              <Upload size={15} /> Upload Past Year Question Papers (ZIP File) *
+              <Upload size={15} /> Upload Past Year Question Papers (ZIP, PDF, Photo, Word, Text) *
             </label>
             <input
               type="file"
               required
-              accept=".zip"
+              accept=".zip,.pdf,.png,.jpg,.jpeg,.webp,.txt,.doc,.docx,.md,*"
               className="form-input"
               style={{ padding: '0.5rem' }}
               onChange={(e) => setZipFile(e.target.files[0] || null)}
             />
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Supports ZIP archives containing past examination PDFs, Word docs, or TXT files. AI extracts marking format and style!
+              Supports ZIP archives, PDF exam papers, photos of question sheets, Word docs, and TXT files. AI extracts marking format and style!
             </p>
           </div>
 

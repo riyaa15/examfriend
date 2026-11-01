@@ -90,6 +90,17 @@ def extract_papers_from_zip(zip_path: str, extract_dir: str) -> str:
                 txt = extract_text_from_pdf(file_path)
                 if txt:
                     combined_texts.append(f"--- PAST PAPER: {file} ---\n{txt}")
+            elif lower_name.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):
+                try:
+                    from rapidocr_onnxruntime import RapidOCR
+                    ocr_engine = RapidOCR()
+                    result, _ = ocr_engine(file_path)
+                    if result:
+                        lines = [line[1].strip() for line in result if len(line) > 1 and line[1].strip()]
+                        if lines:
+                            combined_texts.append(f"--- PAST PAPER (IMAGE): {file} ---\n" + "\n".join(lines))
+                except Exception as e:
+                    print(f"Error OCR-ing paper image {file}: {e}")
             elif lower_name.endswith((".txt", ".md", ".csv")):
                 try:
                     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -204,7 +215,8 @@ def generate_study_plan_pdf(
             Paragraph("Day", header_cell_style),
             Paragraph("Target Date", header_cell_style),
             Paragraph("Subject", header_cell_style),
-            Paragraph("Assigned Topic & Goals", header_cell_style),
+            Paragraph("Topic 1 (Core Focus)", header_cell_style),
+            Paragraph("Topic 2 (Practice & Depth)", header_cell_style),
             Paragraph("Status", header_cell_style)
         ]
     ]
@@ -223,41 +235,48 @@ def generate_study_plan_pdf(
                 Paragraph(f"<b>{day_str}</b>", bold_cell_style),
                 Paragraph(date_str, cell_style),
                 Paragraph("<b>🌴 Holiday</b>", ParagraphStyle('HolSubj', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=colors.HexColor("#059669"))),
-                Paragraph("<b>Rest Day &bull; No study scheduled</b> (Rest, recharge & light review)", ParagraphStyle('HolTopic', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=8.5, textColor=colors.HexColor("#047857"))),
+                Paragraph("<b>Rest Day &bull; No study scheduled</b>", ParagraphStyle('HolTopic1', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=8.5, textColor=colors.HexColor("#047857"))),
+                Paragraph("Rest, recharge & light review", ParagraphStyle('HolTopic2', parent=styles['Normal'], fontName='Helvetica-Oblique', fontSize=8.5, textColor=colors.HexColor("#047857"))),
                 Paragraph("<b>Rest Day</b>", ParagraphStyle('HolStat', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, textColor=colors.HexColor("#059669")))
             ])
             continue
 
-        # Format topics into distinct points
-        raw_topics = item.get("topics")
-        if not raw_topics:
-            raw_t = str(item.get("topic", "-"))
-            if " • " in raw_t:
-                raw_topics = [t.strip() for t in raw_t.split(" • ") if t.strip()]
-            elif "\n" in raw_t:
-                raw_topics = [t.strip() for t in raw_t.split("\n") if t.strip()]
-            else:
-                raw_topics = [raw_t]
+        # Extract Topic 1 and Topic 2 cleanly
+        t1 = item.get("topic_1")
+        t2 = item.get("topic_2")
+        if not t1 or not t2:
+            raw_topics = item.get("topics")
+            if not raw_topics:
+                raw_t = str(item.get("topic", "-"))
+                if " • " in raw_t:
+                    raw_topics = [t.strip() for t in raw_t.split(" • ") if t.strip()]
+                elif "\n" in raw_t:
+                    raw_topics = [t.strip() for t in raw_t.split("\n") if t.strip()]
+                else:
+                    raw_topics = [raw_t]
 
-        bullets = []
-        for t in raw_topics:
-            cleaned = str(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            bullets.append(f"&bull; {cleaned}" if len(raw_topics) > 1 else cleaned)
-        topic_html = "<br/>".join(bullets)
+            if not t1:
+                t1 = raw_topics[0] if raw_topics and len(raw_topics) > 0 else str(item.get("topic", "-"))
+            if not t2:
+                t2 = raw_topics[1] if raw_topics and len(raw_topics) > 1 else "Formula Practice & Active Recall"
+
+        clean_t1 = str(t1).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        clean_t2 = str(t2).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         status_str = "[   ] Done" if not item.get("completed", False) else "[ X ] Completed"
 
-        if len(subj_str) > 60:
-            subj_str = subj_str[:57] + "..."
+        if len(subj_str) > 40:
+            subj_str = subj_str[:37] + "..."
 
         table_data.append([
             Paragraph(f"<b>{day_str}</b>", bold_cell_style),
             Paragraph(date_str, cell_style),
             Paragraph(f"<b>{subj_str}</b>", bold_cell_style),
-            Paragraph(topic_html, cell_style),
+            Paragraph(f"<b>1.</b> {clean_t1}", cell_style),
+            Paragraph(f"<b>2.</b> {clean_t2}", cell_style),
             Paragraph(status_str, cell_style)
         ])
 
-    col_widths = [48, 80, 110, 240, 60]
+    col_widths = [45, 65, 105, 140, 140, 45]
     t = Table(table_data, colWidths=col_widths, repeatRows=1)
     table_styles = [
         ('BACKGROUND', (0, 0), (-1, 0), primary_color),
@@ -649,6 +668,10 @@ def extract_text_from_file_or_photo(file_path: str) -> str:
     lower_path = file_path.lower()
     if lower_path.endswith(".pdf"):
         return extract_text_from_pdf(file_path)
+    
+    if lower_path.endswith(".zip"):
+        extract_dir = os.path.join(os.path.dirname(file_path), f"unzipped_{os.path.splitext(os.path.basename(file_path))[0]}")
+        return extract_papers_from_zip(file_path, extract_dir)
     
     # Handle Image / Photo files with RapidOCR
     if lower_path.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff")):

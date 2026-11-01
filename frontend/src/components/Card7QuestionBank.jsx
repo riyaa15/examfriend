@@ -427,7 +427,7 @@ export default function Card7QuestionBank({ token, onBack, onNavigate, onRefresh
                   <input
                     type="file"
                     id="qb-zip-upload"
-                    accept=".zip,.pdf"
+                    accept=".zip,.pdf,.png,.jpg,.jpeg,.webp,.txt,.doc,.docx,.md,*"
                     style={{ display: 'none' }}
                     onChange={(e) => setSelectedFile(e.target.files[0] || null)}
                   />
@@ -456,10 +456,10 @@ export default function Card7QuestionBank({ token, onBack, onNavigate, onRefresh
                     ) : (
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-                          Click to upload past paper ZIP
+                          Click to upload past papers (ZIP, PDF, Photo, Word, Text)
                         </div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                          Zip file with past papers (2019-2023.pdf, midterms, etc.)
+                          Upload ZIP archives, question PDFs, photos of exam sheets, or notes
                         </div>
                       </div>
                     )}

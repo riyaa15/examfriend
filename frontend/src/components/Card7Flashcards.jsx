@@ -1780,7 +1780,7 @@ export default function Card7Flashcards({ token, onBack, onNavigate, onRefresh }
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.txt"
+                  accept=".pdf,.zip,.png,.jpg,.jpeg,.webp,.doc,.docx,.txt,.md,*"
                   style={{ display: 'none' }}
                   onChange={(e) => {
                     if (e.target.files && e.target.files[0]) {
