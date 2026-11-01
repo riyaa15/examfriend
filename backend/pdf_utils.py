@@ -267,10 +267,13 @@ def generate_study_plan_pdf(
         if len(subj_str) > 40:
             subj_str = subj_str[:37] + "..."
 
+        prio_str = str(item.get("priority", ""))
+        prio_tag = f"<br/><font size=7 color='#4f46e5'><b>[{prio_str} Priority]</b></font>" if prio_str and prio_str != "Rest" else ""
+
         table_data.append([
             Paragraph(f"<b>{day_str}</b>", bold_cell_style),
             Paragraph(date_str, cell_style),
-            Paragraph(f"<b>{subj_str}</b>", bold_cell_style),
+            Paragraph(f"<b>{subj_str}</b>{prio_tag}", bold_cell_style),
             Paragraph(f"<b>1.</b> {clean_t1}", cell_style),
             Paragraph(f"<b>2.</b> {clean_t2}", cell_style),
             Paragraph(status_str, cell_style)

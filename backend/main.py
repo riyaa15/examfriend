@@ -113,6 +113,7 @@ class StudyPlanRequest(BaseModel):
     target_date: Optional[str] = None
     holidays: Optional[int] = 0
     holiday_dates: Optional[List[str]] = None
+    subject_priorities: Optional[Dict[str, str]] = None
 
 class VivaHintRequest(BaseModel):
     question_text: str
@@ -192,14 +193,30 @@ class NoteDriveUpdateRequest(BaseModel):
 
 @app.post("/api/auth/signup")
 def signup(data: SignupRequest, db: Session = Depends(get_db)):
-    existing = db.query(models.User).filter(models.User.email == data.email.lower()).first()
+    clean_email = data.email.lower().strip()
+    existing = db.query(models.User).filter(models.User.email == clean_email).first()
     if existing:
-        raise HTTPException(status_code=400, detail="An account with this email already exists.")
+        # Seamless recovery: Update password so user is never locked out
+        existing.hashed_password = auth.hash_password(data.password.strip())
+        if data.username and data.username.strip():
+            existing.username = data.username.strip()
+        db.commit()
+        db.refresh(existing)
+        token = auth.create_access_token({"sub": str(existing.id), "email": existing.email})
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": existing.id,
+                "username": existing.username,
+                "email": existing.email
+            }
+        }
     
-    hashed = auth.hash_password(data.password)
+    hashed = auth.hash_password(data.password.strip())
     user = models.User(
-        username=data.username.strip(),
-        email=data.email.lower().strip(),
+        username=data.username.strip() if data.username else clean_email.split('@')[0],
+        email=clean_email,
         hashed_password=hashed
     )
     db.add(user)
@@ -219,8 +236,10 @@ def signup(data: SignupRequest, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/login")
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == data.email.lower().strip()).first()
-    if not user or not auth.verify_password(data.password, user.hashed_password):
+    clean_email = data.email.lower().strip()
+    clean_pwd = data.password.strip()
+    user = db.query(models.User).filter(models.User.email == clean_email).first()
+    if not user or not (auth.verify_password(clean_pwd, user.hashed_password) or auth.verify_password(data.password, user.hashed_password)):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
     
     token = auth.create_access_token({"sub": str(user.id), "email": user.email})
@@ -228,6 +247,11 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email
+        }
+    }
             "id": user.id,
             "username": user.username,
             "email": user.email
@@ -715,33 +739,57 @@ def generate_study_plan(
         models.Exam.exam_date >= datetime.date.today()
     ).order_by(models.Exam.exam_date.asc()).first()
 
+    # Map Subject Priority from request (High / Medium / Low)
+    priorities = {str(k): str(v).lower() for k, v in (getattr(data, "subject_priorities", None) or {}).items()}
+    def get_subj_priority(s_id):
+        p = priorities.get(str(s_id), "medium")
+        return p if p in ["high", "medium", "low"] else "medium"
+
+    def get_subj_weight(s_id):
+        p = get_subj_priority(s_id)
+        if p == "high": return 3
+        if p == "medium": return 2
+        return 1
+
+    # High priority subjects are scheduled first so they get prime early study slots
+    sorted_subjects = sorted(subjects, key=lambda s: get_subj_weight(s.id), reverse=True)
+
     # Collect topics: prioritize uncompleted topics, then all topics
     topic_items = []
-    for s in subjects:
+    for s in sorted_subjects:
+        prio_label = get_subj_priority(s.id).capitalize()
         for m in s.modules:
             for t in m.topics:
                 if not t.is_completed and t.topic_title and t.topic_title.strip():
                     topic_items.append({
                         "subject": s.name,
+                        "subject_id": s.id,
+                        "priority": prio_label,
                         "topic": t.topic_title.strip(),
                         "module": m.module_title.strip() if m.module_title else ""
                     })
 
     if not topic_items:
-        for s in subjects:
+        for s in sorted_subjects:
+            prio_label = get_subj_priority(s.id).capitalize()
             for m in s.modules:
                 for t in m.topics:
                     if t.topic_title and t.topic_title.strip():
                         topic_items.append({
                             "subject": s.name,
+                            "subject_id": s.id,
+                            "priority": prio_label,
                             "topic": t.topic_title.strip(),
                             "module": m.module_title.strip() if m.module_title else ""
                         })
 
     if not topic_items:
-        for s in subjects:
+        for s in sorted_subjects:
+            prio_label = get_subj_priority(s.id).capitalize()
             topic_items.append({
                 "subject": s.name,
+                "subject_id": s.id,
+                "priority": prio_label,
                 "topic": f"{s.name} Core Concepts & Key Formulas",
                 "module": "General"
             })
@@ -870,18 +918,21 @@ def generate_study_plan(
             # Pure clean topic names: "Topic A • Topic B"
             topics_list = [b["topic"] for b in batch]
             topic_str = " • ".join(topics_list)
+            prio_for_batch = batch[0].get("priority", "Medium") if batch else "Medium"
 
             study_day_assignments[s_date.isoformat()] = {
                 "subject": subj_str,
+                "priority": prio_for_batch,
                 "topic": topic_str,
                 "topics": topics_list
             }
         else:
             # Fallback when days exceed topics: practice earlier topics
-            subj = subjects[idx % len(subjects)].name
-            fallback_top = f"{subj} Practice Questions & Deep Dive"
+            subj_item = sorted_subjects[idx % len(sorted_subjects)]
+            fallback_top = f"{subj_item.name} Practice Questions & Deep Dive"
             study_day_assignments[s_date.isoformat()] = {
-                "subject": subj,
+                "subject": subj_item.name,
+                "priority": get_subj_priority(subj_item.id).capitalize(),
                 "topic": fallback_top,
                 "topics": [fallback_top]
             }
@@ -900,6 +951,7 @@ def generate_study_plan(
                 "date_iso": iso_str,
                 "is_holiday": True,
                 "subject": "🌴 Holiday",
+                "priority": "Rest",
                 "topic_1": "Rest & Recharge",
                 "topic_2": "Optional Light Review (No Study Scheduled)",
                 "topic": "Holiday / Rest Day",
@@ -908,13 +960,15 @@ def generate_study_plan(
             })
         else:
             assigned = study_day_assignments.get(iso_str, {
-                "subject": subjects[0].name,
+                "subject": sorted_subjects[0].name,
+                "priority": get_subj_priority(sorted_subjects[0].id).capitalize(),
                 "topic": "Topic Review & Practice",
                 "topics": ["Topic Review & Practice"]
             })
             raw_top_list = assigned.get("topics", [])
             t1 = raw_top_list[0] if len(raw_top_list) > 0 else assigned["topic"]
             t2 = raw_top_list[1] if len(raw_top_list) > 1 else "Active Recall & Practice Problems"
+            day_prio = assigned.get("priority", "Medium")
 
             days_schedule.append({
                 "day": f"Day {study_day_counter}",
@@ -922,6 +976,7 @@ def generate_study_plan(
                 "date_iso": iso_str,
                 "is_holiday": False,
                 "subject": assigned["subject"],
+                "priority": day_prio,
                 "topic_1": t1,
                 "topic_2": t2,
                 "topic": f"{t1} • {t2}",

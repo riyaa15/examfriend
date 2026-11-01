@@ -8,8 +8,44 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showServerSettings, setShowServerSettings] = useState(false);
+  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('examfriend_api_url') || 'https://smell-concerns-vocal-implied.trycloudflare.com');
 
   if (!isOpen) return null;
+
+  const handleSaveServerUrl = () => {
+    const cleanUrl = serverUrl.trim().replace(/\/+$/, "");
+    if (cleanUrl) {
+      localStorage.setItem('examfriend_api_url', cleanUrl);
+    } else {
+      localStorage.removeItem('examfriend_api_url');
+    }
+    window.location.reload();
+  };
+
+  const handleRiyaLogin = async () => {
+    setEmail('riyag7527@gmail.com');
+    setPassword('123456');
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'riyag7527@gmail.com', password: '123456' })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Login failed');
+      localStorage.setItem('examfriend_token', data.access_token);
+      localStorage.setItem('examfriend_user', JSON.stringify(data.user));
+      onAuthSuccess(data.user);
+      onClose();
+    } catch (err) {
+      setError(err.message || 'Login failed. Check your internet connection.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -141,6 +177,29 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           </p>
         </div>
 
+        {/* Fast 1-Click Login as Riya */}
+        <button
+          type="button"
+          onClick={handleRiyaLogin}
+          disabled={loading}
+          className="btn btn-primary"
+          style={{
+            width: '100%',
+            marginBottom: '0.65rem',
+            background: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            fontWeight: 700,
+            padding: '0.7rem'
+          }}
+        >
+          <Sparkles size={16} />
+          <span>⚡ 1-Tap Login as Riya (riyag7527@gmail.com)</span>
+        </button>
+
         {/* Demo Fast Login Button */}
         <button
           type="button"
@@ -149,7 +208,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           className="btn btn-secondary"
           style={{
             width: '100%',
-            marginBottom: '1.25rem',
+            marginBottom: '1rem',
             border: '1.5px dashed var(--primary)',
             color: 'var(--primary)',
             background: 'rgba(99, 102, 241, 0.05)',
@@ -286,6 +345,40 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                 Sign Up Here
               </button>
             </span>
+          )}
+        </div>
+
+        {/* Server Connection URL Drawer for Mobile APK */}
+        <div style={{ marginTop: '1.25rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-light)', textAlign: 'center' }}>
+          <button
+            type="button"
+            onClick={() => setShowServerSettings(!showServerSettings)}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            ⚙️ {showServerSettings ? 'Hide Server Settings' : 'App Server Settings (Cloudflare / Render URL)'}
+          </button>
+          {showServerSettings && (
+            <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', textAlign: 'left' }}>
+              <label style={{ fontSize: '0.725rem', fontWeight: 700, display: 'block', marginBottom: '0.25rem' }}>
+                Active Backend Server URL:
+              </label>
+              <input
+                type="url"
+                className="form-input"
+                style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', marginBottom: '0.5rem' }}
+                value={serverUrl}
+                onChange={(e) => setServerUrl(e.target.value)}
+                placeholder="https://your-service.onrender.com"
+              />
+              <button
+                type="button"
+                onClick={handleSaveServerUrl}
+                className="btn btn-primary"
+                style={{ fontSize: '0.7rem', padding: '0.25rem 0.65rem' }}
+              >
+                Save & Connect
+              </button>
+            </div>
           )}
         </div>
       </div>

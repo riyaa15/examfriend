@@ -21,6 +21,7 @@ import {
 export default function Card3StudyPlanGenerator({ exams = [], subjects = [], plans = [], onRefresh, token }) {
   const [numSubjects, setNumSubjects] = useState(() => (subjects && subjects.length > 0 ? 1 : 0));
   const [selectedSubjectIds, setSelectedSubjectIds] = useState(() => (subjects && subjects.length > 0 ? [String(subjects[0].id)] : []));
+  const [subjectPriorities, setSubjectPriorities] = useState({});
   const [planTitle, setPlanTitle] = useState('My Final Exam Revision Plan');
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [targetDate, setTargetDate] = useState('');
@@ -133,6 +134,14 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
     setTimeout(() => setCopiedNotice(false), 2500);
   };
 
+  const handleSetPriority = (subjectId, priority) => {
+    if (!subjectId) return;
+    setSubjectPriorities(prev => ({
+      ...prev,
+      [String(subjectId)]: priority
+    }));
+  };
+
   const handleGeneratePlan = async (e) => {
     e.preventDefault();
     const validIds = selectedSubjectIds.filter(id => id !== '').map(id => parseInt(id));
@@ -153,6 +162,7 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
         body: JSON.stringify({
           title: planTitle.trim() || 'Daily Study Plan',
           subject_ids: validIds,
+          subject_priorities: subjectPriorities,
           start_date: startDate || null,
           target_date: targetDate || null,
           holidays: parseInt(numHolidays) || 0,
@@ -567,27 +577,87 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
               )}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.85rem' }}>
-              {Array.from({ length: numSubjects }).map((_, index) => (
-                <div key={index} className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                    Subject #{index + 1} Slot:
-                  </label>
-                  <select
-                    required
-                    className="form-select"
-                    value={selectedSubjectIds[index] || ''}
-                    onChange={(e) => handleSelectSubjectChange(index, e.target.value)}
-                  >
-                    <option value="">-- Choose Subject from Card 2 --</option>
-                    {subjects.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.total_topics} topics &bull; {s.completion_percentage}% done)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+              {Array.from({ length: numSubjects }).map((_, index) => {
+                const curSubId = selectedSubjectIds[index];
+                const curPriority = (subjectPriorities[String(curSubId)] || 'medium').toLowerCase();
+                return (
+                  <div key={index} className="form-group" style={{ 
+                    marginBottom: 0, 
+                    padding: '0.85rem', 
+                    background: 'var(--bg-subtle)', 
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-light)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700, margin: 0 }}>
+                        Subject #{index + 1} Slot:
+                      </label>
+                      {curSubId && (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          padding: '0.1rem 0.45rem',
+                          borderRadius: '4px',
+                          fontWeight: 700,
+                          background: curPriority === 'high' ? 'rgba(239, 68, 68, 0.15)' : curPriority === 'medium' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                          color: curPriority === 'high' ? '#ef4444' : curPriority === 'medium' ? '#f59e0b' : '#3b82f6',
+                          border: `1px solid ${curPriority === 'high' ? '#fca5a5' : curPriority === 'medium' ? '#fde68a' : '#bfdbfe'}`
+                        }}>
+                          {curPriority === 'high' ? '🔥 High Priority' : curPriority === 'medium' ? '⚡ Med Priority' : '🌱 Low Priority'}
+                        </span>
+                      )}
+                    </div>
+                    <select
+                      required
+                      className="form-select"
+                      value={curSubId || ''}
+                      onChange={(e) => handleSelectSubjectChange(index, e.target.value)}
+                    >
+                      <option value="">-- Choose Subject from Card 2 --</option>
+                      {subjects.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.total_topics} topics &bull; {s.completion_percentage}% done)
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Priority Selector for this Subject */}
+                    {curSubId && (
+                      <div style={{ marginTop: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Priority:</span>
+                        {[
+                          { id: 'high', label: '🔥 High', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)' },
+                          { id: 'medium', label: '⚡ Med', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
+                          { id: 'low', label: '🌱 Low', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)' }
+                        ].map((btn) => {
+                          const active = curPriority === btn.id;
+                          return (
+                            <button
+                              key={btn.id}
+                              type="button"
+                              onClick={() => handleSetPriority(curSubId, btn.id)}
+                              style={{
+                                padding: '0.2rem 0.55rem',
+                                borderRadius: '4px',
+                                fontSize: '0.725rem',
+                                fontWeight: active ? 800 : 500,
+                                cursor: 'pointer',
+                                border: active ? `1.5px solid ${btn.color}` : '1px solid var(--border-light)',
+                                background: active ? btn.bg : 'var(--bg-surface)',
+                                color: active ? btn.color : 'var(--text-muted)',
+                                transition: 'all 0.15s ease'
+                              }}
+                              title={btn.id === 'high' ? 'High priority subjects are scheduled earlier and get extra study coverage' : ''}
+                            >
+                              {btn.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {totalAvailableSubjects === 0 && (
@@ -916,6 +986,22 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
                           }}>
                             {item.subject}
                           </span>
+                          {item.priority && (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem',
+                              fontSize: '0.7rem',
+                              padding: '0.15rem 0.45rem',
+                              borderRadius: '4px',
+                              fontWeight: 700,
+                              background: item.priority === 'High' ? 'rgba(239, 68, 68, 0.15)' : item.priority === 'Medium' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                              color: item.priority === 'High' ? '#ef4444' : item.priority === 'Medium' ? '#f59e0b' : '#3b82f6',
+                              border: `1px solid ${item.priority === 'High' ? '#fca5a5' : item.priority === 'Medium' ? '#fde68a' : '#bfdbfe'}`
+                            }}>
+                              {item.priority === 'High' ? '🔥 High' : item.priority === 'Medium' ? '⚡ Med' : '🌱 Low'}
+                            </span>
+                          )}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                             <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
                               <b style={{ color: 'var(--primary)' }}>Topic 1:</b> {item.topic_1 || (getTopicPoints(item)[0] || item.topic)}
@@ -1010,17 +1096,35 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
                               {item.date}
                             </td>
                             <td style={{ padding: '0.85rem 1rem' }}>
-                              <span style={{
-                                display: 'inline-block',
-                                padding: '0.25rem 0.65rem',
-                                borderRadius: 'var(--radius-sm)',
-                                background: isHol ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.1)',
-                                color: isHol ? '#059669' : 'var(--primary)',
-                                fontWeight: 700,
-                                fontSize: '0.8rem'
-                              }}>
-                                {item.subject}
-                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '0.25rem 0.65rem',
+                                  borderRadius: 'var(--radius-sm)',
+                                  background: isHol ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.1)',
+                                  color: isHol ? '#059669' : 'var(--primary)',
+                                  fontWeight: 700,
+                                  fontSize: '0.8rem'
+                                }}>
+                                  {item.subject}
+                                </span>
+                                {item.priority && (
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.2rem',
+                                    fontSize: '0.675rem',
+                                    padding: '0.12rem 0.4rem',
+                                    borderRadius: '4px',
+                                    fontWeight: 700,
+                                    background: item.priority === 'High' ? 'rgba(239, 68, 68, 0.15)' : item.priority === 'Medium' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                                    color: item.priority === 'High' ? '#ef4444' : item.priority === 'Medium' ? '#f59e0b' : '#3b82f6',
+                                    border: `1px solid ${item.priority === 'High' ? '#fca5a5' : item.priority === 'Medium' ? '#fde68a' : '#bfdbfe'}`
+                                  }}>
+                                    {item.priority === 'High' ? '🔥 High' : item.priority === 'Medium' ? '⚡ Med' : '🌱 Low'}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td style={{ padding: '0.85rem 1rem', color: 'var(--text-primary)' }}>
                               {isHol ? (
