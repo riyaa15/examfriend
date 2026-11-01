@@ -21,16 +21,36 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-export default function Card2SubjectTracker({ subjects, onRefresh, token }) {
+export default function Card2SubjectTracker({ 
+  subjects, 
+  exams = [], 
+  onRefresh, 
+  token, 
+  onNavigate, 
+  initialSubjectName = '', 
+  onClearInitialExam 
+}) {
   const [showForm, setShowForm] = useState(false);
   const [inputMode, setInputMode] = useState('pdf'); // 'pdf' | 'text'
-  const [subjectName, setSubjectName] = useState('');
+  const [subjectName, setSubjectName] = useState(initialSubjectName || '');
   const [numModules, setNumModules] = useState(5);
   const [syllabusFile, setSyllabusFile] = useState(null);
   const [syllabusText, setSyllabusText] = useState('');
+  const [examDate, setExamDate] = useState('');
+  const [autoCreateExam, setAutoCreateExam] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  React.useEffect(() => {
+    if (initialSubjectName) {
+      setSubjectName(initialSubjectName);
+      setShowForm(true);
+      const matched = exams.find(e => e.name.trim().toLowerCase() === initialSubjectName.trim().toLowerCase());
+      if (matched && matched.exam_date) setExamDate(matched.exam_date);
+      if (onClearInitialExam) onClearInitialExam();
+    }
+  }, [initialSubjectName]);
 
   // Topic & Module Edit States
   const [addingTopicModId, setAddingTopicModId] = useState(null);
@@ -51,18 +71,34 @@ export default function Card2SubjectTracker({ subjects, onRefresh, token }) {
 
   const handleCreateSubject = async (e) => {
     e.preventDefault();
-    if (!subjectName.trim()) {
-      setError('Please provide a subject name.');
-      return;
+    let finalName = subjectName.trim();
+    if (!finalName) {
+      if (syllabusFile) {
+        const rawBase = syllabusFile.name.replace(/\.[^/.]+$/, "");
+        const clean = rawBase.replace(/(?:syllabus|curriculum|module|unit|notes|exam|paper|test)/gi, "").replace(/[_\-+]+/g, " ").trim();
+        finalName = clean.length >= 2 ? clean : rawBase.replace(/[_\-+]+/g, " ").trim();
+        finalName = finalName.charAt(0).toUpperCase() + finalName.slice(1);
+      } else if (syllabusText.trim()) {
+        const firstLine = syllabusText.trim().split("\n")[0].trim().replace(/^(?:syllabus for|course|subject)[:\s\-]*/i, "");
+        finalName = firstLine.slice(0, 45) || "New Subject";
+      } else if (exams && exams.length > 0) {
+        finalName = exams[0].name;
+      } else {
+        finalName = "Subject 1";
+      }
     }
+
     setError('');
     setSuccess('');
     setLoading(true);
 
     try {
       const formData = new FormData();
-      formData.append('name', subjectName.trim());
+      formData.append('name', finalName);
       formData.append('num_modules', numModules.toString());
+      if (examDate && autoCreateExam) {
+        formData.append('exam_date', examDate);
+      }
       
       if (inputMode === 'pdf' && syllabusFile) {
         formData.append('file', syllabusFile);
@@ -340,17 +376,108 @@ export default function Card2SubjectTracker({ subjects, onRefresh, token }) {
             </div>
           )}
 
+          {/* Card 1 Quick Connect: Select Exam to Auto-fill Subject Name */}
+          {exams && exams.length > 0 && (
+            <div style={{
+              marginBottom: '1.25rem',
+              padding: '0.85rem 1rem',
+              background: 'rgba(99, 102, 241, 0.06)',
+              borderRadius: 'var(--radius-md)',
+              border: '1.5px solid rgba(99, 102, 241, 0.25)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Sparkles size={16} /> 1-Click Select from Card 1 Scheduled Exams (No Typing Needed!):
+                </span>
+                <span style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
+                  Click an exam below to auto-fill subject name instantly
+                </span>
+              </div>
+
+              {/* Quick-Click Chips */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem', marginBottom: '0.65rem' }}>
+                {exams.map((ex) => {
+                  const isSelected = subjectName.trim().toLowerCase() === ex.name.trim().toLowerCase();
+                  const alreadyAdded = subjects.some(s => s.name.trim().toLowerCase() === ex.name.trim().toLowerCase());
+                  return (
+                    <button
+                      key={ex.id}
+                      type="button"
+                      onClick={() => {
+                        setSubjectName(ex.name);
+                        setExamDate(ex.exam_date || '');
+                        setError('');
+                      }}
+                      style={{
+                        padding: '0.4rem 0.8rem',
+                        borderRadius: 'var(--radius-full)',
+                        fontSize: '0.825rem',
+                        fontWeight: 700,
+                        border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border-light)',
+                        background: isSelected ? 'var(--primary)' : (alreadyAdded ? 'var(--bg-subtle)' : 'var(--bg-surface)'),
+                        color: isSelected ? '#ffffff' : (alreadyAdded ? 'var(--text-muted)' : 'var(--text-primary)'),
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        boxShadow: isSelected ? '0 2px 8px rgba(99, 102, 241, 0.35)' : 'none',
+                        transition: 'var(--transition)'
+                      }}
+                    >
+                      <span>📅 {ex.name}</span>
+                      {ex.exam_date && <span style={{ fontSize: '0.7rem', opacity: 0.85 }}>({ex.exam_date})</span>}
+                      {alreadyAdded && <span style={{ fontSize: '0.65rem', opacity: 0.85 }}>✓ In Tracker</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Dropdown Alternative */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.775rem', fontWeight: 600, color: 'var(--text-muted)' }}>Or choose from list:</span>
+                <select
+                  className="form-select"
+                  style={{ maxWidth: '320px', padding: '0.35rem 0.75rem', fontSize: '0.825rem' }}
+                  value={subjectName}
+                  onChange={(e) => {
+                    const sel = e.target.value;
+                    setSubjectName(sel);
+                    const matched = exams.find(ex => ex.name === sel);
+                    if (matched && matched.exam_date) setExamDate(matched.exam_date);
+                    setError('');
+                  }}
+                >
+                  <option value="">-- Choose from your Card 1 Exams --</option>
+                  {exams.map(ex => (
+                    <option key={ex.id} value={ex.name}>
+                      {ex.name} ({ex.exam_date} &bull; {ex.exam_type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
             <div className="form-group">
-              <label className="form-label" style={{ fontWeight: 700 }}>Subject Name *</label>
+              <label className="form-label" style={{ fontWeight: 700, display: 'flex', justifyContent: 'space-between' }}>
+                <span>Subject Name</span>
+                {subjectName && (
+                  <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 700 }}>
+                    ✓ Linked & Ready
+                  </span>
+                )}
+              </label>
               <input
                 type="text"
-                required
                 className="form-input"
-                placeholder="e.g. Distributed Systems, Machine Learning, Compiler Design"
+                placeholder="e.g. Distributed Systems (or click an exam above to auto-fill)"
                 value={subjectName}
                 onChange={(e) => setSubjectName(e.target.value)}
               />
+              <span style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
+                💡 Click any Card 1 Exam above or upload your syllabus file to fill this automatically!
+              </span>
             </div>
 
             <div className="form-group">
@@ -435,7 +562,19 @@ export default function Card2SubjectTracker({ subjects, onRefresh, token }) {
                 accept=".pdf,.zip,.png,.jpg,.jpeg,.webp,.txt,.doc,.docx,.md,*"
                 className="form-input"
                 style={{ padding: '0.65rem' }}
-                onChange={(e) => setSyllabusFile(e.target.files[0] || null)}
+                onChange={(e) => {
+                  const f = e.target.files[0] || null;
+                  setSyllabusFile(f);
+                  if (f && !subjectName.trim()) {
+                    const rawBase = f.name.replace(/\.[^/.]+$/, "");
+                    const clean = rawBase
+                      .replace(/(?:syllabus|curriculum|module|unit|notes|exam|paper|test)/gi, "")
+                      .replace(/[_\-+]+/g, " ")
+                      .trim();
+                    const derived = clean.length >= 2 ? clean : rawBase.replace(/[_\-+]+/g, " ").trim();
+                    setSubjectName(derived.charAt(0).toUpperCase() + derived.slice(1));
+                  }
+                }}
               />
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
                 💡 Supports digital & scanned PDFs, photos of syllabus pages, ZIP archives, Word docs and text files. All concepts are automatically extracted into a granular checklist!
@@ -459,6 +598,31 @@ export default function Card2SubjectTracker({ subjects, onRefresh, token }) {
               </p>
             </div>
           )}
+
+          {/* Optional Card 1 sync */}
+          <div style={{ marginBottom: '1.25rem', padding: '0.65rem 0.85rem', background: 'rgba(99, 102, 241, 0.05)', borderRadius: 'var(--radius-sm)' }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              <input
+                type="checkbox"
+                checked={autoCreateExam}
+                onChange={(e) => setAutoCreateExam(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+              />
+              <span>🔗 Also create / sync Exam in Card 1 (Exam Countdown)</span>
+            </label>
+            {autoCreateExam && (
+              <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Target Exam Date:</span>
+                <input
+                  type="date"
+                  className="form-input"
+                  style={{ maxWidth: '180px', padding: '0.3rem 0.5rem', fontSize: '0.8rem' }}
+                  value={examDate}
+                  onChange={(e) => setExamDate(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
             <button

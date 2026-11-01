@@ -10,16 +10,19 @@ import {
   ChevronRight, 
   Bookmark, 
   Zap,
-  ArrowLeft
+  ArrowLeft,
+  Layers,
+  Sparkles
 } from 'lucide-react';
 
-export default function Card1ExamCountdown({ exams, onRefresh, onSelectForStudy, token }) {
+export default function Card1ExamCountdown({ exams, subjects = [], onRefresh, onSelectForStudy, onOpenSyllabusForExam, token }) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [examDate, setExamDate] = useState('');
   const [examTime, setExamTime] = useState('09:30');
   const [examType, setExamType] = useState('Final Exam');
   const [notes, setNotes] = useState('');
+  const [autoCreateSubject, setAutoCreateSubject] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -52,7 +55,8 @@ export default function Card1ExamCountdown({ exams, onRefresh, onSelectForStudy,
           exam_date: examDate,
           exam_time: examTime,
           exam_type: examType,
-          notes: notes.trim() || null
+          notes: notes.trim() || null,
+          auto_create_subject: autoCreateSubject
         })
       });
 
@@ -288,6 +292,44 @@ export default function Card1ExamCountdown({ exams, onRefresh, onSelectForStudy,
             </div>
           )}
 
+          {subjects && subjects.length > 0 && (
+            <div style={{
+              marginBottom: '1rem',
+              padding: '0.75rem 0.85rem',
+              background: 'rgba(99, 102, 241, 0.05)',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid rgba(99, 102, 241, 0.2)'
+            }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Sparkles size={13} /> Quick Select from Card 2 Subjects (Click to Auto-fill):
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                {subjects.map(s => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setName(s.name)}
+                    style={{
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: 'var(--radius-full)',
+                      border: name.trim().toLowerCase() === s.name.trim().toLowerCase() ? '1.5px solid var(--primary)' : '1px solid var(--border-light)',
+                      background: name.trim().toLowerCase() === s.name.trim().toLowerCase() ? 'var(--primary)' : 'var(--bg-surface)',
+                      color: name.trim().toLowerCase() === s.name.trim().toLowerCase() ? '#fff' : 'var(--text-primary)',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.3rem'
+                    }}
+                  >
+                    <span>📚 {s.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
             <div className="form-group">
               <label className="form-label">Exam Name *</label>
@@ -349,6 +391,18 @@ export default function Card1ExamCountdown({ exams, onRefresh, onSelectForStudy,
             />
           </div>
 
+          <div style={{ marginBottom: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(99, 102, 241, 0.05)', borderRadius: 'var(--radius-sm)' }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              <input
+                type="checkbox"
+                checked={autoCreateSubject}
+                onChange={(e) => setAutoCreateSubject(e.target.checked)}
+                style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+              />
+              <span>🔗 Automatically create this Subject in Card 2 Tracker (so you never have to re-enter it)</span>
+            </label>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
             <button
               type="button"
@@ -391,6 +445,7 @@ export default function Card1ExamCountdown({ exams, onRefresh, onSelectForStudy,
             const daysLeft = Math.ceil((dt - now) / (1000 * 60 * 60 * 24));
             const isPast = daysLeft < 0;
 
+            const isCard2Tracked = subjects.some(s => s.name.trim().toLowerCase() === exam.name.trim().toLowerCase());
             let urgencyBadge = 'badge-primary';
             let urgencyText = `In ${daysLeft} days`;
             if (isPast) {
@@ -440,6 +495,11 @@ export default function Card1ExamCountdown({ exams, onRefresh, onSelectForStudy,
                       <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{exam.name}</span>
                       <span className={`badge ${urgencyBadge}`}>{urgencyText}</span>
                       <span className="badge badge-cyan" style={{ fontSize: '0.65rem' }}>{exam.exam_type}</span>
+                      {isCard2Tracked && (
+                        <span className="badge badge-success" style={{ fontSize: '0.65rem' }}>
+                          ✓ Syllabus Tracked
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
                       📅 {exam.exam_date} &bull; ⏰ {exam.exam_time}
@@ -448,7 +508,18 @@ export default function Card1ExamCountdown({ exams, onRefresh, onSelectForStudy,
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {onOpenSyllabusForExam && (
+                    <button
+                      onClick={() => onOpenSyllabusForExam(exam)}
+                      className={isCard2Tracked ? "btn btn-secondary" : "btn btn-primary"}
+                      style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                      title={isCard2Tracked ? "View Syllabus in Card 2" : "Add Syllabus in Card 2 without retyping"}
+                    >
+                      <Layers size={13} />
+                      <span>{isCard2Tracked ? "Syllabus (Card 2)" : "+ Syllabus (Card 2)"}</span>
+                    </button>
+                  )}
                   <button 
                     onClick={() => handleDeleteExam(exam.id)}
                     className="btn btn-ghost btn-icon"

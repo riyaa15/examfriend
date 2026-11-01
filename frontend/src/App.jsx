@@ -47,6 +47,7 @@ export default function App() {
   const [plans, setPlans] = useState([]);
   const [papers, setPapers] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [selectedExamForSyllabus, setSelectedExamForSyllabus] = useState(null);
 
   // Routing State ('dashboard', 'countdown', 'syllabus', 'study-plan', 'practice-papers', 'viva', 'teacher', 'question-bank', 'notes', 'trash')
   const validViews = ['dashboard', 'countdown', 'syllabus', 'study-plan', 'practice-papers', 'viva', 'teacher', 'question-bank', 'notes', 'trash'];
@@ -330,11 +331,17 @@ export default function App() {
             />
             <Card1ExamCountdown
               exams={exams}
+              subjects={subjects}
               onRefresh={refreshAllData}
               token={token}
               onSelectForStudy={(exam) => {
                 navigateTo('study-plan');
               }}
+              onOpenSyllabusForExam={(exam) => {
+                setSelectedExamForSyllabus(exam);
+                navigateTo('syllabus');
+              }}
+              onNavigate={navigateTo}
             />
           </div>
         )}
@@ -352,8 +359,12 @@ export default function App() {
             />
             <Card2SubjectTracker
               subjects={subjects}
+              exams={exams}
+              initialSubjectName={selectedExamForSyllabus ? selectedExamForSyllabus.name : ''}
+              onClearInitialExam={() => setSelectedExamForSyllabus(null)}
               onRefresh={refreshAllData}
               token={token}
+              onNavigate={navigateTo}
             />
           </div>
         )}

@@ -93,6 +93,7 @@ class ExamCreate(BaseModel):
     exam_time: Optional[str] = "09:00"
     exam_type: Optional[str] = "Final Exam"
     notes: Optional[str] = None
+    auto_create_subject: Optional[bool] = False
 
 class ExamResponse(BaseModel):
     id: int
@@ -305,6 +306,43 @@ def create_exam(data: ExamCreate, user: models.User = Depends(auth.get_current_u
     db.add(exam)
     db.commit()
     db.refresh(exam)
+
+    # Seamlessly connect Card 1 to Card 2: auto-create Subject in Card 2 so user doesn't have to enter it
+    if getattr(data, "auto_create_subject", False):
+        clean_subj_name = data.name.strip()
+        existing_subj = db.query(models.Subject).filter(
+            models.Subject.user_id == user.id,
+            models.Subject.name.ilike(clean_subj_name)
+        ).first()
+        if not existing_subj:
+            parsed = ai_service.parse_syllabus_with_ai("", clean_subj_name, 5)
+            subj_count = len(parsed.get("modules", [])) or 5
+            new_subj = models.Subject(
+                user_id=user.id,
+                name=clean_subj_name,
+                num_modules=subj_count
+            )
+            db.add(new_subj)
+            db.commit()
+            db.refresh(new_subj)
+            for m_data in parsed.get("modules", []):
+                mod = models.Module(
+                    subject_id=new_subj.id,
+                    module_number=m_data.get("module_number", 1),
+                    module_title=m_data.get("module_title", f"Module {m_data.get('module_number', 1)}")
+                )
+                db.add(mod)
+                db.commit()
+                db.refresh(mod)
+                for t_name in m_data.get("topics", []):
+                    if str(t_name).strip():
+                        db.add(models.Topic(
+                            module_id=mod.id,
+                            topic_title=str(t_name).strip(),
+                            is_completed=False
+                        ))
+            db.commit()
+
     return {"message": "Exam added successfully!", "exam_id": exam.id}
 
 @app.delete("/api/exams/{exam_id}")
@@ -368,10 +406,11 @@ def get_subjects(user: models.User = Depends(auth.get_current_user), db: Session
 
 @app.post("/api/subjects")
 async def create_subject(
-    name: str = Form(...),
+    name: Optional[str] = Form(None),
     num_modules: int = Form(5),
     file: Optional[UploadFile] = File(None),
     syllabus_text: Optional[str] = Form(None),
+    exam_date: Optional[str] = Form(None),
     user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -390,14 +429,29 @@ async def create_subject(
     elif syllabus_text and syllabus_text.strip():
         extracted_text = syllabus_text.strip()
 
+    # Auto-infer subject name if not provided so user never has to type it
+    resolved_name = (name or "").strip()
+    if not resolved_name:
+        if file and file.filename:
+            raw_base = os.path.splitext(file.filename)[0]
+            clean = re.sub(r'(?i)[_\-+]*(?:syllabus|curriculum|module|unit|notes|paper|exam|test)[_\-+]*', ' ', raw_base)
+            clean = re.sub(r'[_\-+]+', ' ', clean).strip()
+            resolved_name = clean.title() if len(clean) >= 2 else raw_base.title()
+        elif syllabus_text and syllabus_text.strip():
+            first_line = syllabus_text.strip().split("\n")[0].strip()
+            first_line = re.sub(r'^(?:syllabus for|course|subject)[:\s\-]*', '', first_line, flags=re.IGNORECASE).strip()
+            resolved_name = first_line[:50] if len(first_line) >= 2 else "New Subject"
+        else:
+            resolved_name = "New Subject"
+
     # Parse syllabus into detailed Module -> granular Topics hierarchy
-    parsed = ai_service.parse_syllabus_with_ai(extracted_text, name.strip(), max(1, num_modules))
+    parsed = ai_service.parse_syllabus_with_ai(extracted_text, resolved_name, max(1, num_modules))
     actual_module_count = len(parsed.get("modules", [])) or max(1, num_modules)
 
     # Subject creation
     subject = models.Subject(
         user_id=user.id,
-        name=name.strip(),
+        name=resolved_name,
         num_modules=actual_module_count,
         syllabus_filename=saved_filename
     )
@@ -424,6 +478,28 @@ async def create_subject(
                 )
                 db.add(top)
         db.commit()
+
+    # If exam_date was provided, automatically connect Card 2 to Card 1 Countdown
+    if exam_date and exam_date.strip():
+        try:
+            e_dt = datetime.date.fromisoformat(exam_date.strip())
+            existing_exam = db.query(models.Exam).filter(
+                models.Exam.user_id == user.id,
+                models.Exam.name.ilike(resolved_name)
+            ).first()
+            if not existing_exam:
+                new_exam = models.Exam(
+                    user_id=user.id,
+                    name=resolved_name,
+                    exam_date=e_dt,
+                    exam_time="09:30",
+                    exam_type="Final Exam",
+                    is_deleted=False
+                )
+                db.add(new_exam)
+                db.commit()
+        except Exception as e_err:
+            print(f"Auto-create exam error: {e_err}")
 
     return {"message": "Subject and detailed syllabus created successfully!", "subject_id": subject.id}
 
