@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://examfriend.vercel.app/sitemap.xml

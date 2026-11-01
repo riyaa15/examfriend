@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'><path d='M12 2L1 7l11 5 9-4.09V17h2V7L12 2z'/><path d='M4.5 10.5v5.27c0 2.5 3.36 4.23 7.5 4.23s7.5-1.73 7.5-4.23v-5.27l-7.5 3.41-7.5-3.41z' opacity='.75'/></svg>" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- PWA & Mobile Web App Meta Tags -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#6366f1" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="EXAMFRIEND" />
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+    
+    <!-- Primary SEO Meta Tags -->
+    <title>EXAMFRIEND &bull; Your All-in-One Smart Study Companion & Exam AI</title>
+    <meta name="title" content="EXAMFRIEND - Your All-in-One Smart Study Companion" />
+    <meta name="description" content="EXAMFRIEND is the ultimate AI exam preparation platform. Live countdowns, exhaustive syllabus tracking, daily study plans, past paper question bank deduplication, AI oral viva tester, and AI teacher video explanations." />
+    <meta name="keywords" content="examfriend, exam friend, examfriend app, exam preparation, syllabus tracker, question bank maker, ai teacher, mock papers, ai viva examiner, study timetable" />
+    <meta name="author" content="EXAMFRIEND" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://examfriend.vercel.app/" />
+
+    <!-- Open Graph / Facebook / WhatsApp -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="EXAMFRIEND" />
+    <meta property="og:url" content="https://examfriend.vercel.app/" />
+    <meta property="og:title" content="EXAMFRIEND - AI-Powered Student Exam Preparation Hub" />
+    <meta property="og:description" content="Plan, Practice, and Ace Every Exam with live countdowns, syllabus checklists, question banks, and AI voice teacher." />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="EXAMFRIEND - AI-Powered Student Exam Preparation Hub" />
+    <meta name="twitter:description" content="Ace your exams with intelligent countdowns, syllabus decomposition, past-paper question banks, and AI viva testing." />
+
+    <!-- Google Structured Data (Schema.org JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "EXAMFRIEND",
+      "alternateName": ["ExamFriend", "Exam Friend", "ExamFriend AI"],
+      "url": "https://examfriend.vercel.app/",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "All",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "description": "EXAMFRIEND is an all-in-one AI exam preparation workspace providing syllabus tracking, past-paper question bank deduplication, daily study plan generator, oral viva examiner, and chalkboard video lectures."
+    }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Kalam:wght@400;700&family=Patrick+Hand&family=Architects+Daughter&family=Gaegu:wght@400;700&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

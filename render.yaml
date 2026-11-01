@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: examfriend
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 8000
+

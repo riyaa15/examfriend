@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">EXAMFRIEND</string>
+    <string name="title_activity_main">EXAMFRIEND</string>
+    <string name="package_name">edu.examfriend.app</string>
+    <string name="custom_url_scheme">edu.examfriend.app</string>
+</resources>

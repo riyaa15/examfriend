@@ -1,0 +1,18 @@
+{
+  "short_name": "EXAMFRIEND",
+  "name": "EXAMFRIEND - Smart Study Companion",
+  "description": "Your all-in-one AI study companion and exam preparation workspace.",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "display": "standalone",
+  "orientation": "portrait"
+}
+
