@@ -2,7 +2,7 @@ import os
 import shutil
 import json
 import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -247,11 +247,6 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
         "access_token": token,
         "token_type": "bearer",
         "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email
-        }
-    }
             "id": user.id,
             "username": user.username,
             "email": user.email
