@@ -241,27 +241,29 @@ def generate_study_plan_pdf(
             ])
             continue
 
-        # Extract Topic 1 and Topic 2 cleanly
-        t1 = item.get("topic_1")
-        t2 = item.get("topic_2")
-        if not t1 or not t2:
-            raw_topics = item.get("topics")
-            if not raw_topics:
-                raw_t = str(item.get("topic", "-"))
-                if " • " in raw_t:
-                    raw_topics = [t.strip() for t in raw_t.split(" • ") if t.strip()]
-                elif "\n" in raw_t:
-                    raw_topics = [t.strip() for t in raw_t.split("\n") if t.strip()]
-                else:
-                    raw_topics = [raw_t]
+        # Extract all topics cleanly for this day (supporting multi-topic day-wise schedules)
+        raw_topics = item.get("topics") or []
+        if not raw_topics:
+            raw_t = str(item.get("topic", "-"))
+            if " • " in raw_t:
+                raw_topics = [t.strip() for t in raw_t.split(" • ") if t.strip()]
+            elif "\n" in raw_t:
+                raw_topics = [t.strip() for t in raw_t.split("\n") if t.strip()]
+            else:
+                raw_topics = [raw_t]
 
-            if not t1:
-                t1 = raw_topics[0] if raw_topics and len(raw_topics) > 0 else str(item.get("topic", "-"))
-            if not t2:
-                t2 = raw_topics[1] if raw_topics and len(raw_topics) > 1 else "Formula Practice & Active Recall"
-
+        t1 = raw_topics[0] if len(raw_topics) > 0 else str(item.get("topic_1", item.get("topic", "-")))
         clean_t1 = str(t1).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        clean_t2 = str(t2).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        if len(raw_topics) == 2:
+            t2 = raw_topics[1]
+            clean_t2 = f"<b>2.</b> " + str(t2).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        elif len(raw_topics) > 2:
+            clean_t2 = "<br/>".join([f"<b>{i+2}.</b> " + str(top).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") for i, top in enumerate(raw_topics[1:])])
+        else:
+            t2 = item.get("topic_2", "Formula Practice & Active Recall")
+            clean_t2 = str(t2).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
         status_str = "[   ] Done" if not item.get("completed", False) else "[ X ] Completed"
 
         if len(subj_str) > 40:
@@ -275,7 +277,7 @@ def generate_study_plan_pdf(
             Paragraph(date_str, cell_style),
             Paragraph(f"<b>{subj_str}</b>{prio_tag}", bold_cell_style),
             Paragraph(f"<b>1.</b> {clean_t1}", cell_style),
-            Paragraph(f"<b>2.</b> {clean_t2}", cell_style),
+            Paragraph(clean_t2, cell_style),
             Paragraph(status_str, cell_style)
         ])
 

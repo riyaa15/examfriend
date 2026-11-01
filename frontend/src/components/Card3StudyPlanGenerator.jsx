@@ -1002,13 +1002,33 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
                               {item.priority === 'High' ? '🔥 High' : item.priority === 'Medium' ? '⚡ Med' : '🌱 Low'}
                             </span>
                           )}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                              <b style={{ color: 'var(--primary)' }}>Topic 1:</b> {item.topic_1 || (getTopicPoints(item)[0] || item.topic)}
-                            </div>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                              <b style={{ color: 'var(--accent-cyan, #06b6d4)' }}>Topic 2:</b> {item.topic_2 || (getTopicPoints(item)[1] || 'Practice & Active Recall')}
-                            </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                            {(() => {
+                              const points = getTopicPoints(item);
+                              if (!points || points.length === 0) {
+                                return (
+                                  <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                                    <b style={{ color: 'var(--primary)' }}>Topic 1:</b> {item.topic_1 || item.topic}
+                                  </div>
+                                );
+                              }
+                              return points.map((top, tIdx) => (
+                                <div key={tIdx} style={{ fontSize: '0.85rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'baseline', gap: '0.45rem' }}>
+                                  <span style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 800,
+                                    padding: '0.1rem 0.45rem',
+                                    borderRadius: '4px',
+                                    background: tIdx === 0 ? 'rgba(99, 102, 241, 0.15)' : tIdx === 1 ? 'rgba(6, 182, 212, 0.15)' : 'rgba(139, 92, 246, 0.15)',
+                                    color: tIdx === 0 ? 'var(--primary)' : tIdx === 1 ? 'var(--accent-cyan, #06b6d4)' : '#8b5cf6',
+                                    whiteSpace: 'nowrap'
+                                  }}>
+                                    Topic {tIdx + 1}:
+                                  </span>
+                                  <span style={{ fontWeight: 600 }}>{top}</span>
+                                </div>
+                              ));
+                            })()}
                           </div>
                         </div>
                         <span className="badge badge-primary" style={{ fontSize: '0.725rem' }}>
@@ -1142,6 +1162,14 @@ export default function Card3StudyPlanGenerator({ exams = [], subjects = [], pla
                                 <span style={{ color: '#047857', fontSize: '0.85rem', fontStyle: 'italic' }}>
                                   No study scheduled
                                 </span>
+                              ) : points.length > 2 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                  {points.slice(1).map((subT, sIdx) => (
+                                    <div key={sIdx} style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                      <b style={{ color: 'var(--accent-cyan, #06b6d4)' }}>Topic {sIdx + 2}:</b> {subT}
+                                    </div>
+                                  ))}
+                                </div>
                               ) : (
                                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                                   {t2}

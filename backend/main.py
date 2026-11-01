@@ -749,34 +749,21 @@ def generate_study_plan(
     # High priority subjects are scheduled first so they get prime early study slots
     sorted_subjects = sorted(subjects, key=lambda s: get_subj_weight(s.id), reverse=True)
 
-    # Collect topics: prioritize uncompleted topics, then all topics
+    # Collect ALL topics from selected subjects in syllabus sequence (Day-wise complete coverage)
     topic_items = []
     for s in sorted_subjects:
         prio_label = get_subj_priority(s.id).capitalize()
         for m in s.modules:
             for t in m.topics:
-                if not t.is_completed and t.topic_title and t.topic_title.strip():
+                if t.topic_title and t.topic_title.strip():
                     topic_items.append({
                         "subject": s.name,
                         "subject_id": s.id,
                         "priority": prio_label,
                         "topic": t.topic_title.strip(),
-                        "module": m.module_title.strip() if m.module_title else ""
+                        "module": m.module_title.strip() if m.module_title else "",
+                        "is_completed": bool(t.is_completed)
                     })
-
-    if not topic_items:
-        for s in sorted_subjects:
-            prio_label = get_subj_priority(s.id).capitalize()
-            for m in s.modules:
-                for t in m.topics:
-                    if t.topic_title and t.topic_title.strip():
-                        topic_items.append({
-                            "subject": s.name,
-                            "subject_id": s.id,
-                            "priority": prio_label,
-                            "topic": t.topic_title.strip(),
-                            "module": m.module_title.strip() if m.module_title else ""
-                        })
 
     if not topic_items:
         for s in sorted_subjects:
@@ -785,8 +772,22 @@ def generate_study_plan(
                 "subject": s.name,
                 "subject_id": s.id,
                 "priority": prio_label,
-                "topic": f"{s.name} Core Concepts & Key Formulas",
-                "module": "General"
+                "topic": f"{s.name} - Core Concepts & Fundamentals",
+                "module": "Basics"
+            })
+            topic_items.append({
+                "subject": s.name,
+                "subject_id": s.id,
+                "priority": prio_label,
+                "topic": f"{s.name} - Important Problem Solving & Formulas",
+                "module": "Application"
+            })
+            topic_items.append({
+                "subject": s.name,
+                "subject_id": s.id,
+                "priority": prio_label,
+                "topic": f"{s.name} - High-Yield Exam Topics & Previous Questions",
+                "module": "Exam Review"
             })
 
     today = datetime.date.today()
@@ -881,11 +882,23 @@ def generate_study_plan(
         revision_days_count = 0
 
     learning_days_count = max(1, num_study_days - revision_days_count)
-    items_per_day = max(1, (len(topic_items) + learning_days_count - 1) // learning_days_count)
+
+    # Partition ALL topics cleanly across learning days so 100% of topics are covered day-wise
+    total_topics = len(topic_items)
+    base_per_day = total_topics // learning_days_count
+    remainder = total_topics % learning_days_count
+
+    daily_batches = []
+    ptr = 0
+    for day_i in range(learning_days_count):
+        take = base_per_day + (1 if day_i < remainder else 0)
+        if take > 0 and ptr < total_topics:
+            daily_batches.append(topic_items[ptr : ptr + take])
+            ptr += take
+        else:
+            daily_batches.append([])
 
     study_day_assignments = {}
-    item_ptr = 0
-
     for idx, s_date in enumerate(study_day_dates):
         is_revision_day = (idx >= learning_days_count)
         if is_revision_day:
@@ -894,6 +907,7 @@ def generate_study_plan(
                 top_str = "Comprehensive Revision across all covered topics"
                 study_day_assignments[s_date.isoformat()] = {
                     "subject": "All Selected Subjects",
+                    "priority": "High",
                     "topic": top_str,
                     "topics": [top_str]
                 }
@@ -901,36 +915,34 @@ def generate_study_plan(
                 top_str = "Final Mock Test & Rapid Formula Recall"
                 study_day_assignments[s_date.isoformat()] = {
                     "subject": "All Selected Subjects",
+                    "priority": "High",
                     "topic": top_str,
                     "topics": [top_str]
                 }
-        elif item_ptr < len(topic_items):
-            batch = topic_items[item_ptr : item_ptr + items_per_day]
-            item_ptr += items_per_day
-            subj_names = list(dict.fromkeys([b["subject"] for b in batch]))
-            subj_str = ", ".join(subj_names[:2]) + (f" (+{len(subj_names)-2} more)" if len(subj_names) > 2 else "")
-            
-            # Pure clean topic names: "Topic A • Topic B"
-            topics_list = [b["topic"] for b in batch]
-            topic_str = " • ".join(topics_list)
-            prio_for_batch = batch[0].get("priority", "Medium") if batch else "Medium"
-
-            study_day_assignments[s_date.isoformat()] = {
-                "subject": subj_str,
-                "priority": prio_for_batch,
-                "topic": topic_str,
-                "topics": topics_list
-            }
         else:
-            # Fallback when days exceed topics: practice earlier topics
-            subj_item = sorted_subjects[idx % len(sorted_subjects)]
-            fallback_top = f"{subj_item.name} Practice Questions & Deep Dive"
-            study_day_assignments[s_date.isoformat()] = {
-                "subject": subj_item.name,
-                "priority": get_subj_priority(subj_item.id).capitalize(),
-                "topic": fallback_top,
-                "topics": [fallback_top]
-            }
+            batch = daily_batches[idx] if idx < len(daily_batches) else []
+            if batch:
+                subj_names = list(dict.fromkeys([b["subject"] for b in batch]))
+                subj_str = ", ".join(subj_names[:2]) + (f" (+{len(subj_names)-2} more)" if len(subj_names) > 2 else "")
+                topics_list = [b["topic"] for b in batch]
+                topic_str = " • ".join(topics_list)
+                prio_for_batch = batch[0].get("priority", "Medium")
+                study_day_assignments[s_date.isoformat()] = {
+                    "subject": subj_str,
+                    "priority": prio_for_batch,
+                    "topic": topic_str,
+                    "topics": topics_list
+                }
+            else:
+                # Fallback when days exceed topics: practice earlier topics
+                subj_item = sorted_subjects[idx % len(sorted_subjects)]
+                fallback_top = f"{subj_item.name} Practice Questions & Deep Dive"
+                study_day_assignments[s_date.isoformat()] = {
+                    "subject": subj_item.name,
+                    "priority": get_subj_priority(subj_item.id).capitalize(),
+                    "topic": fallback_top,
+                    "topics": [fallback_top]
+                }
 
     # Build chronological days_schedule with sequential Day 1 to Day N study days
     days_schedule = []
@@ -962,7 +974,10 @@ def generate_study_plan(
             })
             raw_top_list = assigned.get("topics", [])
             t1 = raw_top_list[0] if len(raw_top_list) > 0 else assigned["topic"]
-            t2 = raw_top_list[1] if len(raw_top_list) > 1 else "Active Recall & Practice Problems"
+            if len(raw_top_list) > 1:
+                t2 = " • ".join(raw_top_list[1:])
+            else:
+                t2 = "Active Recall & Formula Practice"
             day_prio = assigned.get("priority", "Medium")
 
             days_schedule.append({
@@ -974,8 +989,8 @@ def generate_study_plan(
                 "priority": day_prio,
                 "topic_1": t1,
                 "topic_2": t2,
-                "topic": f"{t1} • {t2}",
-                "topics": [t1, t2],
+                "topic": " • ".join(raw_top_list) if raw_top_list else assigned["topic"],
+                "topics": raw_top_list if raw_top_list else [assigned["topic"]],
                 "completed": False
             })
             study_day_counter += 1
