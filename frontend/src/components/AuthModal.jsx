@@ -9,7 +9,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showServerSettings, setShowServerSettings] = useState(false);
-  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('examfriend_api_url') || 'https://smell-concerns-vocal-implied.trycloudflare.com');
+  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('examfriend_api_url') || 'https://goto-kinase-indoor-nice.trycloudflare.com');
 
   if (!isOpen) return null;
 
@@ -41,7 +41,13 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       onAuthSuccess(data.user);
       onClose();
     } catch (err) {
-      setError(err.message || 'Login failed. Check your internet connection.');
+      const msg = err.message || '';
+      if (msg.includes('fetch') || msg.includes('Network') || msg.includes('Failed')) {
+        setError('⚠️ Cannot connect to server. Tap ⚙️ Server Settings below to enter your live server URL.');
+        setShowServerSettings(true);
+      } else {
+        setError(msg || 'Login failed. Check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -72,7 +78,13 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       onAuthSuccess(data.user);
       onClose();
     } catch (err) {
-      setError(err.message || 'Something went wrong');
+      const msg = err.message || '';
+      if (msg.includes('fetch') || msg.includes('Network') || msg.includes('Failed')) {
+        setError('⚠️ Cannot connect to server. Tap ⚙️ Server Settings below to enter your live server URL.');
+        setShowServerSettings(true);
+      } else {
+        setError(msg || 'Something went wrong');
+      }
     } finally {
       setLoading(false);
     }

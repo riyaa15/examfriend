@@ -7,7 +7,7 @@ import App from './App.jsx'
 const customApiUrl = localStorage.getItem('examfriend_api_url');
 const isNativeApp = window.Capacitor || window.location.protocol === 'capacitor:' || window.location.protocol === 'file:';
 // Live public tunnel URL so mobile APK on real phones connects instantly to backend
-const PUBLIC_TUNNEL_URL = 'https://smell-concerns-vocal-implied.trycloudflare.com';
+const PUBLIC_TUNNEL_URL = 'https://goto-kinase-indoor-nice.trycloudflare.com';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || customApiUrl || (isNativeApp ? PUBLIC_TUNNEL_URL : '');
 
 if (API_BASE_URL) {

@@ -5,7 +5,3 @@ services:
     dockerfilePath: Dockerfile
     plan: free
     region: oregon
-    envVars:
-      - key: PORT
-        value: 8000
-
