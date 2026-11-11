@@ -12,7 +12,7 @@ import shutil
 import json
 import datetime
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -725,6 +725,7 @@ def update_profile(data: ProfileUpdateRequest, user: models.User = Depends(auth.
 
 @app.post("/api/profile/generate-sync-code")
 def generate_sync_code(
+    request: Request,
     data: Optional[GenerateSyncCodeRequest] = None,
     user: Optional[models.User] = Depends(auth.get_optional_user),
     db: Session = Depends(get_db)
@@ -761,8 +762,11 @@ def generate_sync_code(
     db.add(record)
     db.commit()
 
-    base_url = "https://ericsson-kings-united-regarded.trycloudflare.com"
-    sync_link = f"{base_url}/#sync={sync_code}"
+    # Dynamic host detection so QR code works on any tunnel, domain, or localhost
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "xml-peaceful-antonio-truth.trycloudflare.com"
+    proto = request.headers.get("x-forwarded-proto") or ("https" if "cloudflare" in forwarded_host else request.url.scheme)
+    base_url = f"{proto}://{forwarded_host}".rstrip("/")
+    sync_link = f"{base_url}/?sync={sync_code}"
 
     return {
         "status": "success",
@@ -792,8 +796,7 @@ def fetch_by_sync_code(data: SyncCodeFetchRequest, db: Session = Depends(get_db)
     user = None
     if sync_record and sync_record.user:
         user = sync_record.user
-        sync_record.is_used = True
-        db.commit()
+        # Do not instantly lock out sync_record so retries or multiple devices can sync in the 30-min window
     elif clean_code in ["123456", "DEMO99"]:
         user = db.query(models.User).order_by(models.User.id.desc()).first()
 

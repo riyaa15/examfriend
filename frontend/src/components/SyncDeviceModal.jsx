@@ -40,13 +40,19 @@ export default function SyncDeviceModal({ isOpen, onClose, user, token }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Could not generate sync code');
 
+      // Always use current window origin so QR code works on any live domain, tunnel or local network
+      const currentOrigin = window.location.origin;
+      const effectiveLink = (currentOrigin && !currentOrigin.includes('localhost')) 
+        ? `${currentOrigin}/?sync=${data.sync_code}`
+        : (data.sync_link || `${currentOrigin}/?sync=${data.sync_code}`);
+
       setSyncCode(data.sync_code);
-      setSyncUrl(data.sync_link);
+      setSyncUrl(effectiveLink);
       setExpiresIn(data.expires_in_minutes || 30);
 
       // Render crisp QR Code data URL
       try {
-        const qrUrl = await QRCode.toDataURL(data.sync_link, {
+        const qrUrl = await QRCode.toDataURL(effectiveLink, {
           width: 240,
           margin: 2,
           color: {
@@ -57,7 +63,7 @@ export default function SyncDeviceModal({ isOpen, onClose, user, token }) {
         setQrDataUrl(qrUrl);
       } catch (qrErr) {
         // Fallback to online QR API if canvas fails
-        setQrDataUrl(data.qr_api_url);
+        setQrDataUrl(`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(effectiveLink)}`);
       }
 
     } catch (err) {
@@ -314,3 +320,4 @@ export default function SyncDeviceModal({ isOpen, onClose, user, token }) {
     </div>
   );
 }
+

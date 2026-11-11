@@ -80,33 +80,40 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Auto-Sync from QR Code Scan (URL hash #sync=123456)
+  // Auto-Sync from QR Code Scan (Supports both ?sync=123456 and #sync=123456)
   useEffect(() => {
     const handleQrSync = async () => {
-      const hash = window.location.hash || '';
-      if (hash.startsWith('#sync=')) {
-        const code = hash.replace('#sync=', '').trim();
-        if (code) {
-          try {
-            const res = await fetch('/api/profile/fetch-by-code', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sync_code: code })
-            });
-            const data = await res.json();
-            if (res.ok && data.access_token) {
-              const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-              localStorage.setItem('examfriend_token', data.access_token);
-              localStorage.setItem('examfriend_user', JSON.stringify(data.user));
-              localStorage.setItem('examfriend_expires_at', String(Date.now() + thirtyDaysMs));
-              setUser(data.user);
-              setToken(data.access_token);
-              setAuthModalOpen(false);
-              window.location.hash = '#dashboard';
-            }
-          } catch (err) {
-            console.error('QR sync failed:', err);
+      const searchParams = new URLSearchParams(window.location.search);
+      let code = searchParams.get('sync');
+
+      if (!code) {
+        const hash = window.location.hash || '';
+        if (hash.startsWith('#sync=')) {
+          code = hash.replace('#sync=', '').trim();
+        }
+      }
+
+      if (code) {
+        try {
+          const res = await fetch('/api/profile/fetch-by-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sync_code: code.trim() })
+          });
+          const data = await res.json();
+          if (res.ok && data.access_token) {
+            const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+            localStorage.setItem('examfriend_token', data.access_token);
+            localStorage.setItem('examfriend_user', JSON.stringify(data.user));
+            localStorage.setItem('examfriend_expires_at', String(Date.now() + thirtyDaysMs));
+            setUser(data.user);
+            setToken(data.access_token);
+            setAuthModalOpen(false);
+            window.history.replaceState({}, document.title, window.location.pathname + '#dashboard');
+            setCurrentView('dashboard');
           }
+        } catch (err) {
+          console.error('QR sync failed:', err);
         }
       }
     };
