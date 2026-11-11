@@ -15,18 +15,9 @@ import Card8NotesDrive from './components/Card8NotesDrive';
 import Card9Trash from './components/Card9Trash';
 import MobileBottomNav from './components/MobileBottomNav';
 import { 
-  Clock, 
-  BookOpen, 
-  CalendarRange, 
-  FileStack, 
-  Mic, 
   Sparkles, 
   GraduationCap,
-  Menu,
-  ArrowRight,
-  FileArchive,
-  Trash2,
-  Folder
+  Menu
 } from 'lucide-react';
 
 export default function App() {

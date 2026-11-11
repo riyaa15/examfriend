@@ -1,12 +1,8 @@
 import React from 'react';
 import {
   X,
-  User,
   GraduationCap,
-  Sparkles,
   Flame,
-  Calendar,
-  CheckCircle2,
   Clock,
   BookOpen,
   CalendarRange,
@@ -20,7 +16,6 @@ import {
   Sun,
   ShieldCheck,
   ChevronRight,
-  FileArchive,
   Folder,
   Zap
 } from 'lucide-react';

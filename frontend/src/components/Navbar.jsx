@@ -9,9 +9,7 @@ import {
   Calendar, 
   CheckCircle2,
   Menu,
-  Trash2,
-  Presentation,
-  PanelLeftOpen
+  Trash2
 } from 'lucide-react';
 
 export default function Navbar({ 

@@ -9,7 +9,6 @@ import {
   Mic, 
   Presentation, 
   Trash2, 
-  FileArchive,
   Folder,
   Zap
 } from 'lucide-react';
