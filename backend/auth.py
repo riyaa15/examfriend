@@ -1,5 +1,6 @@
 import os
 import datetime
+from typing import Optional
 import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -63,3 +64,19 @@ def get_current_user(
             detail="User not found",
         )
     return user
+
+def get_optional_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> Optional[models.User]:
+    if not credentials:
+        return None
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            return None
+        return db.query(models.User).filter(models.User.id == int(user_id)).first()
+    except Exception:
+        return None
