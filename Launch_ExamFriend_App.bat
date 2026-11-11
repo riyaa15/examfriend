@@ -18,9 +18,10 @@ if %errorlevel% neq 0 (
 
 :: 3. Launch in Standalone Native Desktop App window mode
 if exist "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" (
-    start "" "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --app="http://localhost:8000" --app-id=examfriend --window-size=1280,850
+    start "" "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --app="http://localhost:8000"
 ) else if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
-    start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --app="http://localhost:8000" --app-id=examfriend --window-size=1280,850
+    start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --app="http://localhost:8000"
 ) else (
     start http://localhost:8000
 )
+
