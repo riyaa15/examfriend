@@ -14,6 +14,7 @@ import Card7Flashcards from './components/Card7Flashcards';
 import Card8NotesDrive from './components/Card8NotesDrive';
 import Card9Trash from './components/Card9Trash';
 import MobileBottomNav from './components/MobileBottomNav';
+import SyncDeviceModal from './components/SyncDeviceModal';
 import { 
   Sparkles, 
   GraduationCap,
@@ -44,6 +45,7 @@ export default function App() {
   const [token, setToken] = useState(initialSession.token);
   const [authModalOpen, setAuthModalOpen] = useState(() => !initialSession.token);
   const [authModalMode, setAuthModalMode] = useState('create');
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [trashCount, setTrashCount] = useState(0);
 
@@ -76,6 +78,39 @@ export default function App() {
 
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Auto-Sync from QR Code Scan (URL hash #sync=123456)
+  useEffect(() => {
+    const handleQrSync = async () => {
+      const hash = window.location.hash || '';
+      if (hash.startsWith('#sync=')) {
+        const code = hash.replace('#sync=', '').trim();
+        if (code) {
+          try {
+            const res = await fetch('/api/profile/fetch-by-code', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sync_code: code })
+            });
+            const data = await res.json();
+            if (res.ok && data.access_token) {
+              const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+              localStorage.setItem('examfriend_token', data.access_token);
+              localStorage.setItem('examfriend_user', JSON.stringify(data.user));
+              localStorage.setItem('examfriend_expires_at', String(Date.now() + thirtyDaysMs));
+              setUser(data.user);
+              setToken(data.access_token);
+              setAuthModalOpen(false);
+              window.location.hash = '#dashboard';
+            }
+          } catch (err) {
+            console.error('QR sync failed:', err);
+          }
+        }
+      }
+    };
+    handleQrSync();
   }, []);
 
   const navigateTo = (viewName) => {
@@ -213,6 +248,7 @@ export default function App() {
           setAuthModalMode('create');
           setAuthModalOpen(true);
         }}
+        onOpenSyncModal={() => setSyncModalOpen(true)}
         onToggleSidebar={() => setSidebarOpen(prev => !prev)}
         onNavigate={navigateTo}
         trashCount={trashCount}
@@ -560,6 +596,14 @@ export default function App() {
         onAuthSuccess={handleAuthSuccess}
         initialMode={authModalMode}
         currentProfile={user}
+      />
+
+      {/* Cross-Device QR & 6-Digit Sync Modal */}
+      <SyncDeviceModal
+        isOpen={syncModalOpen}
+        onClose={() => setSyncModalOpen(false)}
+        user={user}
+        token={token}
       />
 
       {/* Floating Bottom Navigation Bar on Mobile */}

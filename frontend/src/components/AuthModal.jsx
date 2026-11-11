@@ -36,6 +36,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
   const [phone, setPhone] = useState(currentProfile?.phone || '');
 
   // Sync Device (Fetch Existing Profile)
+  const [syncCodeInput, setSyncCodeInput] = useState('');
   const [syncQuery, setSyncQuery] = useState('');
   const [availableProfiles, setAvailableProfiles] = useState([]);
   const [syncedSummary, setSyncedSummary] = useState(null);
@@ -128,7 +129,43 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
     }
   };
 
-  // 2. Fetch Profile from Another Device
+  // 2A. Fetch Profile via 6-Digit Sync Code or QR Code
+  const handleFetchBySyncCode = async (codeToUse) => {
+    const code = (codeToUse || syncCodeInput).trim();
+    if (!code) {
+      setError('Please enter the 6-digit sync code.');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+    setSyncedSummary(null);
+
+    try {
+      const res = await fetch('/api/profile/fetch-by-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sync_code: code })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Invalid or expired sync code');
+
+      setSyncedSummary(data.synced_data);
+      setSuccessMsg(`🎉 Code Verified! Synced all data for ${data.user.name}.`);
+
+      setTimeout(() => {
+        handleSaveSession(data);
+      }, 800);
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 2B. Fetch Profile from Another Device (Email / Name)
   const handleFetchProfile = async (lookupQuery) => {
     const query = (lookupQuery || syncQuery).trim();
     if (!query) {
@@ -635,70 +672,133 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode 
               
               {/* Informational Banner */}
               <div style={{
-                background: 'var(--bg-subtle)',
-                border: '1px solid var(--border-light)',
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%)',
+                border: '1.5px solid rgba(99, 102, 241, 0.25)',
                 borderRadius: 'var(--radius-lg)',
-                padding: '1rem',
+                padding: '0.85rem 1rem',
                 display: 'flex',
                 gap: '0.75rem',
-                alignItems: 'flex-start'
+                alignItems: 'center'
               }}>
                 <div style={{
-                  background: 'var(--primary-light)',
-                  color: 'var(--primary)',
-                  padding: '0.4rem',
+                  background: 'var(--primary)',
+                  color: '#fff',
+                  padding: '0.45rem',
                   borderRadius: 'var(--radius-md)',
-                  flexShrink: 0
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}>
-                  <Laptop size={20} />
+                  <Smartphone size={20} />
                 </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
-                    Seamless Cross-Device Synchronization
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 800, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                    Fast QR & Code Sync
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                    Enter the email address you used on your laptop or phone. All your exams, subjects, notes, and study plans will be loaded onto this device immediately.
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Scan the QR code shown on your other device or enter the 6-digit sync code below.
                   </div>
                 </div>
               </div>
 
-              {/* Fetch Form */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                <label style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Enter Your Profile Email Address:
+              {/* METHOD 1: 6-DIGIT SYNC CODE */}
+              <div style={{
+                background: 'var(--bg-subtle)',
+                border: '1.5px solid var(--border-light)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.65rem'
+              }}>
+                <label style={{ fontSize: '0.825rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Zap size={15} color="var(--accent-amber)" />
+                  <span>Option 1: Enter 6-Digit Sync Code</span>
                 </label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="text"
-                    placeholder="e.g. riya@gmail.com (or student name)"
+                    maxLength={10}
+                    placeholder="e.g. 849201"
+                    value={syncCodeInput}
+                    onChange={(e) => setSyncCodeInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleFetchBySyncCode(); }}
+                    style={{
+                      flex: 1,
+                      padding: '0.7rem 0.85rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1.5px solid var(--primary)',
+                      background: 'var(--bg-card)',
+                      color: 'var(--text-primary)',
+                      fontSize: '1.25rem',
+                      fontWeight: 800,
+                      letterSpacing: '0.15em',
+                      textAlign: 'center'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleFetchBySyncCode()}
+                    disabled={loading || !syncCodeInput.trim()}
+                    className="btn btn-primary"
+                    style={{
+                      padding: '0.7rem 1.25rem',
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    {loading ? <RefreshCw size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    <span>Sync Now</span>
+                  </button>
+                </div>
+                <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
+                  💡 Click <b>"📲 Sync Device"</b> on your other device's top bar to see its 6-digit code or QR code!
+                </div>
+              </div>
+
+              {/* METHOD 2: EMAIL / NAME LOOKUP */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Mail size={13} />
+                  <span>Option 2: Or Fetch by Profile Email</span>
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    placeholder="e.g. riya@gmail.com"
                     value={syncQuery}
                     onChange={(e) => setSyncQuery(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleFetchProfile(); }}
                     style={{
                       flex: 1,
-                      padding: '0.7rem 0.85rem',
+                      padding: '0.65rem 0.85rem',
                       borderRadius: 'var(--radius-md)',
                       border: '1px solid var(--border-light)',
                       background: 'var(--bg-subtle)',
                       color: 'var(--text-primary)',
-                      fontSize: '0.9rem'
+                      fontSize: '0.875rem'
                     }}
                   />
                   <button
                     type="button"
                     onClick={() => handleFetchProfile()}
                     disabled={loading || !syncQuery.trim()}
-                    className="btn btn-primary"
+                    className="btn btn-secondary"
                     style={{
-                      padding: '0.7rem 1.25rem',
+                      padding: '0.65rem 1rem',
                       fontWeight: 700,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.4rem'
+                      gap: '0.4rem',
+                      fontSize: '0.825rem'
                     }}
                   >
-                    {loading ? <RefreshCw size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                    <span>Fetch Data</span>
+                    {loading ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                    <span>Fetch Email</span>
                   </button>
                 </div>
               </div>

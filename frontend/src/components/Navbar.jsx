@@ -9,7 +9,8 @@ import {
   Calendar, 
   CheckCircle2,
   Menu,
-  Trash2
+  Trash2,
+  QrCode
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -19,6 +20,7 @@ export default function Navbar({
   toggleTheme, 
   onLogout, 
   onOpenAuth,
+  onOpenSyncModal,
   onToggleSidebar,
   onNavigate,
   trashCount = 0
@@ -217,6 +219,28 @@ export default function Navbar({
                   </span>
                 </div>
               </div>
+
+              {/* Sync Device Button (QR & Code) */}
+              {onOpenSyncModal && (
+                <button
+                  onClick={onOpenSyncModal}
+                  className="btn btn-secondary"
+                  style={{
+                    padding: '0.45rem 0.75rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    borderColor: 'rgba(99, 102, 241, 0.3)',
+                    color: 'var(--primary)'
+                  }}
+                  title="Scan QR Code or generate 6-digit sync code for another phone or device"
+                >
+                  <QrCode size={15} />
+                  <span className="nav-btn-text">Sync Device</span>
+                </button>
+              )}
 
               <button 
                 onClick={onLogout}

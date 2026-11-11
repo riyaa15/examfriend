@@ -28,6 +28,18 @@ class User(Base):
     handwritten_notes = relationship("HandwrittenNote", back_populates="user", cascade="all, delete-orphan")
     notes_drive = relationship("NotesDriveItem", back_populates="user", cascade="all, delete-orphan")
 
+class ProfileSyncCode(Base):
+    __tablename__ = "profile_sync_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    sync_code = Column(String(20), index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    is_used = Column(Boolean, default=False)
+
+    user = relationship("User")
+
 class OTPVerification(Base):
     __tablename__ = "otp_verifications"
 

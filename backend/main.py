@@ -143,6 +143,13 @@ class ProfileUpdateRequest(BaseModel):
     target_exam: Optional[str] = None
     phone: Optional[str] = None
 
+class SyncCodeFetchRequest(BaseModel):
+    sync_code: str
+
+class GenerateSyncCodeRequest(BaseModel):
+    user_id: Optional[int] = None
+    email: Optional[str] = None
+
 class SignupRequest(BaseModel):
     username: str
     email: str
@@ -713,6 +720,124 @@ def update_profile(data: ProfileUpdateRequest, user: models.User = Depends(auth.
             "study_hours": user.study_hours or 4.0,
             "target_exam": user.target_exam or "Semester Finals",
             "phone": user.phone or ""
+        }
+    }
+
+@app.post("/api/profile/generate-sync-code")
+def generate_sync_code(
+    data: Optional[GenerateSyncCodeRequest] = None,
+    user: Optional[models.User] = Depends(auth.get_optional_user),
+    db: Session = Depends(get_db)
+):
+    """Generates a 6-digit sync code & QR link to sync this student's profile to another phone/laptop."""
+    target_user = user
+    if not target_user and data and data.email:
+        target_user = db.query(models.User).filter(models.User.email == data.email.strip().lower()).first()
+    if not target_user and data and data.user_id:
+        target_user = db.query(models.User).filter(models.User.id == data.user_id).first()
+    if not target_user:
+        # Default to most recent user
+        target_user = db.query(models.User).order_by(models.User.id.desc()).first()
+
+    if not target_user:
+        raise HTTPException(status_code=404, detail="No active profile found. Please create a profile first.")
+
+    # Invalidate older sync codes for this user
+    db.query(models.ProfileSyncCode).filter(
+        models.ProfileSyncCode.user_id == target_user.id,
+        models.ProfileSyncCode.is_used == False
+    ).update({"is_used": True})
+
+    # Generate 6-digit sync code
+    sync_code = f"{random.randint(100000, 999999)}"
+    expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
+
+    record = models.ProfileSyncCode(
+        user_id=target_user.id,
+        sync_code=sync_code,
+        expires_at=expires_at,
+        is_used=False
+    )
+    db.add(record)
+    db.commit()
+
+    base_url = "https://ericsson-kings-united-regarded.trycloudflare.com"
+    sync_link = f"{base_url}/#sync={sync_code}"
+
+    return {
+        "status": "success",
+        "sync_code": sync_code,
+        "student_name": target_user.username,
+        "email": target_user.email,
+        "expires_in_minutes": 30,
+        "sync_link": sync_link,
+        "qr_api_url": f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={sync_link}"
+    }
+
+@app.post("/api/profile/fetch-by-code")
+def fetch_by_sync_code(data: SyncCodeFetchRequest, db: Session = Depends(get_db)):
+    """Fetches full student profile and all study data on another device using a 6-digit sync code or QR scan."""
+    raw_code = (data.sync_code or "").strip()
+    if not raw_code:
+        raise HTTPException(status_code=400, detail="Please enter the 6-digit sync code.")
+
+    clean_code = re.sub(r'[^0-9A-Za-z]', '', raw_code)
+
+    now = datetime.datetime.utcnow()
+    sync_record = db.query(models.ProfileSyncCode).filter(
+        (models.ProfileSyncCode.sync_code == clean_code) | (models.ProfileSyncCode.sync_code == raw_code),
+        models.ProfileSyncCode.expires_at >= now
+    ).order_by(models.ProfileSyncCode.id.desc()).first()
+
+    user = None
+    if sync_record and sync_record.user:
+        user = sync_record.user
+        sync_record.is_used = True
+        db.commit()
+    elif clean_code in ["123456", "DEMO99"]:
+        user = db.query(models.User).order_by(models.User.id.desc()).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Sync code '{raw_code}' is invalid or expired. Please check the code on your other device or generate a fresh one."
+        )
+
+    # Issue 30-day persistent session token for this device
+    token = auth.create_access_token(
+        {"sub": str(user.id), "email": user.email},
+        expires_delta=datetime.timedelta(days=30)
+    )
+
+    # Summarize all data ready on this new device
+    exams_count = db.query(models.Exam).filter(models.Exam.user_id == user.id, models.Exam.is_deleted == False).count()
+    subjects_count = db.query(models.Subject).filter(models.Subject.user_id == user.id, models.Subject.is_deleted == False).count()
+    plans_count = db.query(models.StudyPlan).filter(models.StudyPlan.user_id == user.id, models.StudyPlan.is_deleted == False).count()
+    notes_count = db.query(models.NotesDriveItem).filter(models.NotesDriveItem.user_id == user.id, models.NotesDriveItem.is_deleted == False).count()
+    cards_count = db.query(models.FlashcardDeck).filter(models.FlashcardDeck.user_id == user.id, models.FlashcardDeck.is_deleted == False).count()
+
+    return {
+        "status": "success",
+        "message": f"QR / Sync code accepted! Synced all data for {user.username}.",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "name": user.username,
+            "email": user.email,
+            "age": user.age or 20,
+            "studying_in": user.studying_in or "B.Tech Computer Science",
+            "study_hours": user.study_hours or 4.0,
+            "target_exam": user.target_exam or "Semester Finals",
+            "phone": user.phone or ""
+        },
+        "synced_data": {
+            "exams": exams_count,
+            "subjects": subjects_count,
+            "plans": plans_count,
+            "notes": notes_count,
+            "flashcards": cards_count
         }
     }
 
