@@ -8,6 +8,5 @@
     "checkJs": false,
     "baseUrl": "./frontend/src"
   },
-  "include": ["frontend/src/**/*"]
+  "include": ["frontend/src/**/*", "frontend/vite.config.js"]
 }
-
