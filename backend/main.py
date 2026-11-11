@@ -3815,6 +3815,23 @@ def empty_trash(user: models.User = Depends(auth.get_current_user), db: Session 
     return {"message": f"Emptied trash! Permanently removed {deleted_total} item(s)."}
 
 
+@app.get("/download/apk")
+@app.get("/api/download/apk")
+def download_apk():
+    apk_candidates = [
+        os.path.join(frontend_dist, "EXAMPLAN.apk"),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "EXAMPLAN.apk")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "android", "app", "build", "outputs", "apk", "debug", "app-debug.apk")),
+    ]
+    for p in apk_candidates:
+        if os.path.isfile(p):
+            return FileResponse(
+                p,
+                media_type="application/vnd.android.package-archive",
+                filename="EXAMPLAN.apk"
+            )
+    raise HTTPException(status_code=404, detail="APK build not found")
+
 @app.get("/api/health")
 def health_check():
     return {
