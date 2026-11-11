@@ -2,7 +2,11 @@ import os
 import datetime
 import zipfile
 from typing import List, Dict, Any
-import fitz # PyMuPDF
+try:
+    import pymupdf as fitz
+except ImportError:
+    import fitz
+
 from pypdf import PdfReader
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, A4
