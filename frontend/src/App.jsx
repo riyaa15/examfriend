@@ -31,12 +31,27 @@ import {
 
 export default function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem('examfriend_theme') || 'light');
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('examfriend_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [token, setToken] = useState(() => localStorage.getItem('examfriend_token') || '');
-  const [authModalOpen, setAuthModalOpen] = useState(false);
+  
+  // 2-Week Session Expiry Validator (If within 2 weeks -> Open Dashboard directly. If > 2 weeks -> Prompt login)
+  const getValidSession = () => {
+    const savedToken = localStorage.getItem('examfriend_token');
+    const expiresAt = localStorage.getItem('examfriend_expires_at');
+    if (!savedToken) return { token: '', user: null };
+    if (expiresAt && Date.now() > parseInt(expiresAt, 10)) {
+      // 2 Weeks Expired! Clear session
+      localStorage.removeItem('examfriend_token');
+      localStorage.removeItem('examfriend_user');
+      localStorage.removeItem('examfriend_expires_at');
+      return { token: '', user: null };
+    }
+    const savedUser = localStorage.getItem('examfriend_user');
+    return { token: savedToken, user: savedUser ? JSON.parse(savedUser) : null };
+  };
+
+  const initialSession = getValidSession();
+  const [user, setUser] = useState(initialSession.user);
+  const [token, setToken] = useState(initialSession.token);
+  const [authModalOpen, setAuthModalOpen] = useState(() => !initialSession.token);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [trashCount, setTrashCount] = useState(0);
 
@@ -146,6 +161,7 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('examfriend_token');
     localStorage.removeItem('examfriend_user');
+    localStorage.removeItem('examfriend_expires_at');
     setUser(null);
     setToken('');
     setStats(null);
@@ -162,7 +178,13 @@ export default function App() {
 
   const handleAuthSuccess = (userData) => {
     setUser(userData);
-    setToken(localStorage.getItem('examfriend_token') || '');
+    const curToken = localStorage.getItem('examfriend_token') || '';
+    setToken(curToken);
+    // Ensure 14 days expiration marker is set
+    if (!localStorage.getItem('examfriend_expires_at')) {
+      localStorage.setItem('examfriend_expires_at', String(Date.now() + 14 * 24 * 60 * 60 * 1000));
+    }
+    setAuthModalOpen(false);
   };
 
   return (

@@ -7,9 +7,10 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=True)
+    phone = Column(String(50), unique=True, index=True, nullable=True)
     username = Column(String(100), nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     exams = relationship("Exam", back_populates="user", cascade="all, delete-orphan")
@@ -22,6 +23,17 @@ class User(Base):
     flashcard_decks = relationship("FlashcardDeck", back_populates="user", cascade="all, delete-orphan")
     handwritten_notes = relationship("HandwrittenNote", back_populates="user", cascade="all, delete-orphan")
     notes_drive = relationship("NotesDriveItem", back_populates="user", cascade="all, delete-orphan")
+
+class OTPVerification(Base):
+    __tablename__ = "otp_verifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    phone = Column(String(50), index=True, nullable=False)
+    otp_code = Column(String(10), nullable=False)
+    purpose = Column(String(50), default="login")
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    is_used = Column(Boolean, default=False)
 
 class Exam(Base):
     __tablename__ = "exams"

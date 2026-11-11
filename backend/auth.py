@@ -10,7 +10,7 @@ import models
 
 SECRET_KEY = os.getenv("JWT_SECRET", "examfriend_ultra_secure_jwt_secret_key_2026_xyz")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS = 30
+ACCESS_TOKEN_EXPIRE_DAYS = 14 # 2 Weeks persistent session as requested
 
 security = HTTPBearer(auto_error=False)
 
