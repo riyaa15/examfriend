@@ -11,6 +11,10 @@ class User(Base):
     phone = Column(String(50), unique=True, index=True, nullable=True)
     username = Column(String(100), nullable=False)
     hashed_password = Column(String(255), nullable=True)
+    age = Column(Integer, nullable=True, default=20)
+    studying_in = Column(String(255), nullable=True, default="B.Tech Computer Science")
+    study_hours = Column(Float, nullable=True, default=4.0)
+    target_exam = Column(String(255), nullable=True, default="Semester Finals")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     exams = relationship("Exam", back_populates="user", cascade="all, delete-orphan")

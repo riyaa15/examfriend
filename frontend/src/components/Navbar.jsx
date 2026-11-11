@@ -177,9 +177,9 @@ export default function Navbar({
           </button>
 
           {user ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
               <div 
-                onClick={onToggleSidebar}
+                onClick={onOpenAuth}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -188,48 +188,54 @@ export default function Navbar({
                   padding: '0.35rem 0.85rem',
                   borderRadius: 'var(--radius-full)',
                   border: '1px solid var(--border-light)',
-                  fontSize: '0.875rem',
+                  fontSize: '0.85rem',
                   cursor: 'pointer',
                   transition: 'var(--transition)'
                 }}
-                title="Click to view student profile in sidebar"
+                title="Click to view & edit your student profile or sync with another device"
               >
                 <div style={{
-                  width: '26px',
-                  height: '26px',
+                  width: '28px',
+                  height: '28px',
                   borderRadius: '50%',
                   background: 'var(--grad-accent)',
                   color: '#fff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontWeight: 700,
-                  fontSize: '0.75rem'
+                  fontWeight: 800,
+                  fontSize: '0.8rem'
                 }}>
-                  {user.username ? user.username[0].toUpperCase() : 'S'}
+                  {user.name ? user.name[0].toUpperCase() : (user.username ? user.username[0].toUpperCase() : 'S')}
                 </div>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {user.username}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+                  <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {user.name || user.username}
+                  </span>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                    {user.studying_in ? user.studying_in.split('-')[0].trim() : 'Student Profile'}
+                  </span>
+                </div>
               </div>
+
               <button 
                 onClick={onLogout}
                 className="btn btn-secondary"
-                style={{ padding: '0.5rem 0.85rem', fontSize: '0.825rem' }}
-                title="Sign Out"
+                style={{ padding: '0.45rem 0.75rem', fontSize: '0.8rem' }}
+                title="Switch Profile or Sign Out"
               >
-                <LogOut size={15} />
-                <span>Logout</span>
+                <LogOut size={14} />
+                <span className="nav-btn-text">Switch</span>
               </button>
             </div>
           ) : (
             <button 
               onClick={onOpenAuth}
               className="btn btn-primary"
-              style={{ padding: '0.55rem 1.25rem' }}
+              style={{ padding: '0.55rem 1.15rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
             >
               <UserCheck size={16} />
-              <span>Student Sign In</span>
+              <span>Make / Select Profile</span>
             </button>
           )}
         </div>

@@ -43,6 +43,7 @@ export default function App() {
   const [user, setUser] = useState(initialSession.user);
   const [token, setToken] = useState(initialSession.token);
   const [authModalOpen, setAuthModalOpen] = useState(() => !initialSession.token);
+  const [authModalMode, setAuthModalMode] = useState('create');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [trashCount, setTrashCount] = useState(0);
 
@@ -104,6 +105,9 @@ export default function App() {
       if (meRes.ok) {
         const meData = await meRes.json();
         setStats(meData.stats);
+        if (meData.username) {
+          setUser(prev => ({ ...(prev || {}), ...meData }));
+        }
       } else if (meRes.status === 401) {
         handleLogout();
         return;
@@ -192,6 +196,10 @@ export default function App() {
         theme={theme}
         toggleTheme={toggleTheme}
         onLogout={handleLogout}
+        onOpenProfile={() => {
+          setAuthModalMode('create');
+          setAuthModalOpen(true);
+        }}
       />
 
       {/* Navbar */}
@@ -201,7 +209,10 @@ export default function App() {
         theme={theme}
         toggleTheme={toggleTheme}
         onLogout={handleLogout}
-        onOpenAuth={() => setAuthModalOpen(true)}
+        onOpenAuth={() => {
+          setAuthModalMode('create');
+          setAuthModalOpen(true);
+        }}
         onToggleSidebar={() => setSidebarOpen(prev => !prev)}
         onNavigate={navigateTo}
         trashCount={trashCount}
@@ -542,11 +553,13 @@ export default function App() {
         <p>Empowering Students Worldwide to Plan, Practice, and Ace Every Exam 🚀</p>
       </footer>
 
-      {/* Authentication Modal */}
+      {/* Make Profile & Cross-Device Sync Modal */}
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
+        initialMode={authModalMode}
+        currentProfile={user}
       />
 
       {/* Floating Bottom Navigation Bar on Mobile */}

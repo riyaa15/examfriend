@@ -30,7 +30,8 @@ export default function Sidebar({
   trashCount = 0,
   theme,
   toggleTheme,
-  onLogout
+  onLogout,
+  onOpenProfile
 }) {
   const navCards = [
     {
@@ -250,18 +251,51 @@ export default function Sidebar({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)', truncate: 'true' }}>
-                  {user?.username || 'Student'}
+                  {user?.name || user?.username || 'Student'}
                 </span>
                 <ShieldCheck size={14} color="var(--primary)" />
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {user?.email || 'student@examfriend.edu'}
+                {user?.studying_in || 'College / University'}
               </div>
-              <span className="badge badge-primary" style={{ fontSize: '0.625rem', padding: '0.15rem 0.5rem', marginTop: '0.35rem' }}>
-                Semester Pro 🎓
-              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.35rem' }}>
+                {user?.age && (
+                  <span className="badge badge-secondary" style={{ fontSize: '0.625rem', padding: '0.1rem 0.45rem' }}>
+                    {user.age} yrs
+                  </span>
+                )}
+                {user?.study_hours && (
+                  <span className="badge badge-primary" style={{ fontSize: '0.625rem', padding: '0.1rem 0.45rem' }}>
+                    🎯 {user.study_hours}h / day
+                  </span>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* Edit Profile & Sync Button */}
+          {onOpenProfile && (
+            <button
+              onClick={() => {
+                onClose();
+                onOpenProfile();
+              }}
+              className="btn btn-secondary"
+              style={{
+                width: '100%',
+                padding: '0.45rem 0.75rem',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                marginBottom: '0.85rem'
+              }}
+            >
+              <span>✏️ Edit Profile & Sync Devices</span>
+            </button>
+          )}
 
           {/* Quick Stats Bars */}
           {stats && (

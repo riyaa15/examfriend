@@ -37,6 +37,20 @@ try:
 except Exception:
     pass
 
+# Safe migrations for profile columns in users (Profile Setup & Cross-Device Sync)
+for col_name, col_def in [
+    ("age", "INTEGER DEFAULT 20"),
+    ("studying_in", "VARCHAR(255) DEFAULT 'B.Tech Computer Science'"),
+    ("study_hours", "FLOAT DEFAULT 4.0"),
+    ("target_exam", "VARCHAR(255) DEFAULT 'Semester Finals'")
+]:
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_def}"))
+            conn.commit()
+    except Exception:
+        pass
+
 # Safe migration for language column in ai_teacher_lessons
 try:
     with engine.connect() as conn:
@@ -107,6 +121,27 @@ class PhoneSignupRequest(BaseModel):
 class PhoneLoginRequest(BaseModel):
     phone: str
     otp: str
+
+class ProfileSaveRequest(BaseModel):
+    name: str
+    email: str
+    age: Optional[int] = 20
+    studying_in: Optional[str] = "B.Tech Computer Science"
+    study_hours: Optional[float] = 4.0
+    target_exam: Optional[str] = "Semester Finals"
+    phone: Optional[str] = None
+
+class ProfileFetchRequest(BaseModel):
+    email_or_phone: str
+
+class ProfileUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    age: Optional[int] = None
+    studying_in: Optional[str] = None
+    study_hours: Optional[float] = None
+    target_exam: Optional[str] = None
+    phone: Optional[str] = None
 
 class SignupRequest(BaseModel):
     username: str
@@ -471,14 +506,213 @@ def get_me(user: models.User = Depends(auth.get_current_user), db: Session = Dep
     return {
         "id": user.id,
         "username": user.username,
+        "name": user.username,
         "email": user.email,
         "phone": getattr(user, "phone", None),
+        "age": getattr(user, "age", 20) or 20,
+        "studying_in": getattr(user, "studying_in", "B.Tech Computer Science") or "B.Tech Computer Science",
+        "study_hours": getattr(user, "study_hours", 4.0) or 4.0,
+        "target_exam": getattr(user, "target_exam", "Semester Finals") or "Semester Finals",
         "stats": {
             "upcoming_exams": exams_count,
             "total_subjects": subjects_count,
             "completed_topics": completed,
             "total_topics": total,
             "overall_progress": overall_progress
+        }
+    }
+
+# ----------------- MAKE & SYNC PROFILE SYSTEM ----------------- #
+
+@app.post("/api/profile/save")
+def save_profile(data: ProfileSaveRequest, db: Session = Depends(get_db)):
+    clean_name = (data.name or "").strip()
+    clean_email = (data.email or "").strip().lower()
+    
+    if not clean_name:
+        raise HTTPException(status_code=400, detail="Please enter your student name.")
+    if not clean_email or "@" not in clean_email:
+        clean_email = f"{re.sub(r'[^a-zA-Z0-9]', '', clean_name).lower() or 'student'}@examfriend.local"
+
+    # Check if a profile with this email exists
+    user = db.query(models.User).filter(models.User.email == clean_email).first()
+
+    if user:
+        # Update existing profile
+        user.username = clean_name
+        user.age = data.age or user.age or 20
+        user.studying_in = (data.studying_in or user.studying_in or "B.Tech Computer Science").strip()
+        user.study_hours = float(data.study_hours if data.study_hours is not None else (user.study_hours or 4.0))
+        user.target_exam = (data.target_exam or user.target_exam or "Semester Finals").strip()
+        if data.phone:
+            user.phone = clean_phone_number(data.phone)
+        db.commit()
+        db.refresh(user)
+    else:
+        # Create brand new student profile
+        user = models.User(
+            username=clean_name,
+            email=clean_email,
+            phone=clean_phone_number(data.phone) if data.phone else None,
+            age=data.age or 20,
+            studying_in=(data.studying_in or "B.Tech Computer Science").strip(),
+            study_hours=float(data.study_hours or 4.0),
+            target_exam=(data.target_exam or "Semester Finals").strip(),
+            hashed_password=auth.hash_password("PROFILE_USER")
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    # 30-day persistent session token
+    token = auth.create_access_token(
+        {"sub": str(user.id), "email": user.email},
+        expires_delta=datetime.timedelta(days=30)
+    )
+
+    exams_count = db.query(models.Exam).filter(models.Exam.user_id == user.id, models.Exam.is_deleted == False).count()
+    subjects_count = db.query(models.Subject).filter(models.Subject.user_id == user.id, models.Subject.is_deleted == False).count()
+    plans_count = db.query(models.StudyPlan).filter(models.StudyPlan.user_id == user.id, models.StudyPlan.is_deleted == False).count()
+
+    return {
+        "status": "success",
+        "message": f"Welcome, {user.username}! Profile ready.",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "name": user.username,
+            "email": user.email,
+            "age": user.age or 20,
+            "studying_in": user.studying_in or "B.Tech Computer Science",
+            "study_hours": user.study_hours or 4.0,
+            "target_exam": user.target_exam or "Semester Finals",
+            "phone": user.phone or ""
+        },
+        "stats": {
+            "exams": exams_count,
+            "subjects": subjects_count,
+            "plans": plans_count
+        }
+    }
+
+@app.post("/api/profile/fetch")
+def fetch_profile(data: ProfileFetchRequest, db: Session = Depends(get_db)):
+    """Fetch existing student profile and all associated data for cross-device usage."""
+    raw_query = (data.email_or_phone or "").strip()
+    if not raw_query:
+        raise HTTPException(status_code=400, detail="Please enter your email or phone number to fetch your profile.")
+
+    clean_email = raw_query.lower()
+    clean_phone = clean_phone_number(raw_query)
+
+    query_filter = (models.User.email == clean_email)
+    if clean_phone and len(clean_phone) >= 10:
+        query_filter = query_filter | (models.User.phone == clean_phone)
+    query_filter = query_filter | (models.User.username.ilike(raw_query))
+
+    user = db.query(models.User).filter(query_filter).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No profile found matching '{raw_query}'. You can create a new profile in 10 seconds!"
+        )
+
+    # Issue 30-day token for this device
+    token = auth.create_access_token(
+        {"sub": str(user.id), "email": user.email},
+        expires_delta=datetime.timedelta(days=30)
+    )
+
+    exams_count = db.query(models.Exam).filter(models.Exam.user_id == user.id, models.Exam.is_deleted == False).count()
+    subjects_count = db.query(models.Subject).filter(models.Subject.user_id == user.id, models.Subject.is_deleted == False).count()
+    plans_count = db.query(models.StudyPlan).filter(models.StudyPlan.user_id == user.id, models.StudyPlan.is_deleted == False).count()
+    notes_count = db.query(models.NotesDriveItem).filter(models.NotesDriveItem.user_id == user.id, models.NotesDriveItem.is_deleted == False).count()
+    cards_count = db.query(models.FlashcardDeck).filter(models.FlashcardDeck.user_id == user.id, models.FlashcardDeck.is_deleted == False).count()
+
+    return {
+        "status": "success",
+        "message": f"Profile found! Loaded all data for {user.username}.",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "name": user.username,
+            "email": user.email,
+            "age": user.age or 20,
+            "studying_in": user.studying_in or "B.Tech Computer Science",
+            "study_hours": user.study_hours or 4.0,
+            "target_exam": user.target_exam or "Semester Finals",
+            "phone": user.phone or ""
+        },
+        "synced_data": {
+            "exams": exams_count,
+            "subjects": subjects_count,
+            "plans": plans_count,
+            "notes": notes_count,
+            "flashcards": cards_count
+        }
+    }
+
+@app.get("/api/profile/list")
+def list_profiles(db: Session = Depends(get_db)):
+    """List profiles for 1-tap fast switching across devices or multiple students."""
+    users = db.query(models.User).order_by(models.User.id.desc()).limit(15).all()
+    results = []
+    for u in users:
+        exams_count = db.query(models.Exam).filter(models.Exam.user_id == u.id, models.Exam.is_deleted == False).count()
+        subjects_count = db.query(models.Subject).filter(models.Subject.user_id == u.id, models.Subject.is_deleted == False).count()
+        results.append({
+            "id": u.id,
+            "name": u.username,
+            "username": u.username,
+            "email": u.email,
+            "age": u.age or 20,
+            "studying_in": u.studying_in or "B.Tech Computer Science",
+            "study_hours": u.study_hours or 4.0,
+            "target_exam": u.target_exam or "Semester Finals",
+            "phone": u.phone or "",
+            "exams_count": exams_count,
+            "subjects_count": subjects_count
+        })
+    return results
+
+@app.put("/api/profile/update")
+def update_profile(data: ProfileUpdateRequest, user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    if data.name and data.name.strip():
+        user.username = data.name.strip()
+    if data.email and "@" in data.email:
+        user.email = data.email.strip().lower()
+    if data.age is not None:
+        user.age = data.age
+    if data.studying_in is not None:
+        user.studying_in = data.studying_in.strip()
+    if data.study_hours is not None:
+        user.study_hours = float(data.study_hours)
+    if data.target_exam is not None:
+        user.target_exam = data.target_exam.strip()
+    if data.phone is not None:
+        user.phone = clean_phone_number(data.phone)
+    
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "status": "success",
+        "message": "Profile updated successfully!",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "name": user.username,
+            "email": user.email,
+            "age": user.age or 20,
+            "studying_in": user.studying_in or "B.Tech Computer Science",
+            "study_hours": user.study_hours or 4.0,
+            "target_exam": user.target_exam or "Semester Finals",
+            "phone": user.phone or ""
         }
     }
 

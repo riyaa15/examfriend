@@ -2,72 +2,79 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Sparkles, 
-  LogIn, 
-  UserPlus, 
-  Lock, 
-  Mail, 
   User, 
+  Mail, 
   Phone, 
-  KeyRound, 
-  CheckCircle2, 
-  RefreshCw, 
+  BookOpen, 
+  Clock, 
+  GraduationCap, 
+  Target, 
+  Calendar, 
   ArrowRight, 
-  ShieldCheck,
-  Copy,
-  Check
+  RefreshCw, 
+  ShieldCheck, 
+  CheckCircle2, 
+  Smartphone, 
+  Laptop, 
+  Layers,
+  ChevronRight,
+  Zap,
+  Edit3
 } from 'lucide-react';
 
-export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
-  // Primary mode: 'phone' (Phone + OTP) or 'email' (Legacy Email + Password)
-  const [authMethod, setAuthMethod] = useState('phone');
-  // 'login' or 'signup'
-  const [isSignup, setIsSignup] = useState(false);
+export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialMode = 'create', currentProfile = null }) {
+  // Mode: 'create' (Make Profile), 'sync' (Fetch on Another Device), 'edit' (Edit Profile)
+  const [activeTab, setActiveTab] = useState(initialMode === 'edit' ? 'edit' : (initialMode || 'create'));
 
-  // Phone + OTP State
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [receivedOtp, setReceivedOtp] = useState('');
-  const [resendCountdown, setResendCountdown] = useState(0);
-  const [copiedOtp, setCopiedOtp] = useState(false);
+  // Profile Fields
+  const [name, setName] = useState(currentProfile?.username || currentProfile?.name || '');
+  const [email, setEmail] = useState(currentProfile?.email || '');
+  const [age, setAge] = useState(currentProfile?.age || 20);
+  const [studyingIn, setStudyingIn] = useState(currentProfile?.studying_in || 'B.Tech Computer Science - Sem 7');
+  const [studyHours, setStudyHours] = useState(currentProfile?.study_hours || 4);
+  const [targetExam, setTargetExam] = useState(currentProfile?.target_exam || 'Semester Finals');
+  const [phone, setPhone] = useState(currentProfile?.phone || '');
 
-  // Legacy Email + Password State
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  // Sync Device (Fetch Existing Profile)
+  const [syncQuery, setSyncQuery] = useState('');
+  const [availableProfiles, setAvailableProfiles] = useState([]);
+  const [syncedSummary, setSyncedSummary] = useState(null);
 
-  // Status & Connection State
+  // Status & Connection
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [showServerSettings, setShowServerSettings] = useState(false);
-  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('examfriend_api_url') || 'https://ericsson-kings-united-regarded.trycloudflare.com');
 
-  // Countdown timer for OTP resend
+  // Update fields when currentProfile changes
   useEffect(() => {
-    let timer;
-    if (resendCountdown > 0) {
-      timer = setTimeout(() => setResendCountdown(prev => prev - 1), 1000);
+    if (currentProfile) {
+      setName(currentProfile.username || currentProfile.name || '');
+      setEmail(currentProfile.email || '');
+      setAge(currentProfile.age || 20);
+      setStudyingIn(currentProfile.studying_in || 'B.Tech Computer Science - Sem 7');
+      setStudyHours(currentProfile.study_hours || 4);
+      setTargetExam(currentProfile.target_exam || 'Semester Finals');
+      setPhone(currentProfile.phone || '');
     }
-    return () => clearTimeout(timer);
-  }, [resendCountdown]);
+  }, [currentProfile]);
+
+  // Load available profiles from server for 1-tap sync
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/profile/list')
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) setAvailableProfiles(data);
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSaveServerUrl = () => {
-    const cleanUrl = serverUrl.trim().replace(/\/+$/, "");
-    if (cleanUrl) {
-      localStorage.setItem('examfriend_api_url', cleanUrl);
-    } else {
-      localStorage.removeItem('examfriend_api_url');
-    }
-    window.location.reload();
-  };
-
-  const handleSuccessLogin = (data) => {
-    // 14 Days (2 Weeks) persistent session marker
-    const twoWeeksMs = 14 * 24 * 60 * 60 * 1000;
-    const expiresAt = Date.now() + twoWeeksMs;
+  const handleSaveSession = (data) => {
+    const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+    const expiresAt = Date.now() + thirtyDaysMs;
     localStorage.setItem('examfriend_token', data.access_token);
     localStorage.setItem('examfriend_user', JSON.stringify(data.user));
     localStorage.setItem('examfriend_expires_at', String(expiresAt));
@@ -76,706 +83,737 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     if (onClose) onClose();
   };
 
-  // 1. Send OTP (For both Sign Up and Login)
-  const handleSendOtp = async (e) => {
-    if (e) e.preventDefault();
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
-      setError('Please enter a valid 10-digit mobile number.');
+  // 1. Make / Save Profile
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      setError('Please enter your full student name.');
       return;
     }
-    if (isSignup && !name.trim()) {
-      setError('Please enter your full student name.');
+    if (!email.trim() || !email.includes('@')) {
+      setError('Please provide a valid email address so you can sync across devices.');
       return;
     }
 
     setError('');
-    setSuccessMsg('');
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      const res = await fetch('/api/profile/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone: cleanPhone,
-          purpose: isSignup ? 'signup' : 'login'
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          age: parseInt(age, 10) || 20,
+          studying_in: studyingIn.trim(),
+          study_hours: parseFloat(studyHours) || 4.0,
+          target_exam: targetExam.trim(),
+          phone: phone.trim()
         })
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Failed to send OTP code');
+      if (!res.ok) throw new Error(data.detail || 'Could not save profile');
 
-      setOtpSent(true);
-      setReceivedOtp(data.otp || '');
-      setResendCountdown(30);
-      setSuccessMsg(`OTP sent to +91 ${cleanPhone}!`);
+      setSuccessMsg(`🎉 Welcome, ${data.user.name}! Your profile is ready.`);
+      setTimeout(() => {
+        handleSaveSession(data);
+      }, 700);
+
     } catch (err) {
-      const msg = err.message || '';
-      if (msg.includes('fetch') || msg.includes('Network') || msg.includes('Failed')) {
-        setError('⚠️ Cannot connect to server. Check server URL below under ⚙️ Server Settings.');
-        setShowServerSettings(true);
-      } else {
-        setError(msg || 'Unable to send OTP. Please try again.');
-      }
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // 2. Verify OTP & Authenticate (Phone Signup or Phone Login)
-  const handleVerifyOtp = async (e) => {
-    if (e) e.preventDefault();
-    const cleanPhone = phone.replace(/\D/g, '');
-    const cleanOtp = otp.trim();
-
-    if (!cleanOtp) {
-      setError('Please enter the 6-digit OTP code.');
+  // 2. Fetch Profile from Another Device
+  const handleFetchProfile = async (lookupQuery) => {
+    const query = (lookupQuery || syncQuery).trim();
+    if (!query) {
+      setError('Please enter your email to fetch your profile.');
       return;
     }
 
     setError('');
     setLoading(true);
+    setSyncedSummary(null);
 
     try {
-      const endpoint = isSignup ? '/api/auth/phone-signup' : '/api/auth/phone-login';
-      const payload = isSignup 
-        ? { name: name.trim(), phone: cleanPhone, otp: cleanOtp }
-        : { phone: cleanPhone, otp: cleanOtp };
-
-      const res = await fetch(endpoint, {
+      const res = await fetch('/api/profile/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ email_or_phone: query })
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'OTP verification failed');
+      if (!res.ok) throw new Error(data.detail || 'Profile not found');
 
-      handleSuccessLogin(data);
+      setSyncedSummary(data.synced_data);
+      setSuccessMsg(`✅ Synced! Found ${data.user.name}'s profile.`);
+
+      setTimeout(() => {
+        handleSaveSession(data);
+      }, 900);
+
     } catch (err) {
-      const msg = err.message || '';
-      if (msg.includes('fetch') || msg.includes('Network') || msg.includes('Failed')) {
-        setError('⚠️ Connection error. Check server URL below under ⚙️ Server Settings.');
-        setShowServerSettings(true);
-      } else {
-        setError(msg || 'Verification failed. Please check the OTP.');
-      }
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // 3. Auto-fill received OTP
-  const handleAutoFillOtp = () => {
-    if (receivedOtp) {
-      setOtp(receivedOtp);
-      setCopiedOtp(true);
-      setTimeout(() => setCopiedOtp(false), 2000);
-    }
-  };
-
-  // 4. Quick Demo Phone Login (1-Click Instant Access)
-  const handleQuickDemoLogin = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/auth/phone-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: '9876543210', otp: '123456' })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Demo login failed');
-      handleSuccessLogin(data);
-    } catch (err) {
-      setError(err.message || 'Demo login failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 5. Legacy Email & Password Submit
-  const handleEmailSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    const endpoint = isSignup ? '/api/auth/signup' : '/api/auth/login';
-    const payload = isSignup 
-      ? { username: name.trim() || email.split('@')[0], email: email.trim(), password }
-      : { email: email.trim(), password };
-
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Login failed');
-      handleSuccessLogin(data);
-    } catch (err) {
-      setError(err.message || 'Authentication failed');
-    } finally {
-      setLoading(false);
-    }
+  // 3. Quick 1-Tap Demo Profile
+  const handleQuickDemo = () => {
+    setName('Riya Sharma');
+    setEmail('riya.sharma@examfriend.edu');
+    setAge(21);
+    setStudyingIn('B.Tech Computer Science - Sem 7');
+    setStudyHours(5);
+    setTargetExam('Mumbai University Sem VII Finals');
+    setPhone('9876543210');
+    setActiveTab('create');
   };
 
   return (
-    <div style={{
+    <div className="modal-backdrop" style={{
       position: 'fixed',
       inset: 0,
-      background: 'rgba(15, 23, 42, 0.7)',
-      backdropFilter: 'blur(10px)',
-      WebkitBackdropFilter: 'blur(10px)',
+      zIndex: 9999,
+      background: 'rgba(15, 23, 42, 0.75)',
+      backdropFilter: 'blur(8px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 250,
-      padding: '1rem'
+      padding: '1rem',
+      overflowY: 'auto'
     }}>
-      <div className="glass-card" style={{
-        maxWidth: '440px',
-        width: '100%',
-        maxHeight: '92vh',
-        overflowY: 'auto',
-        position: 'relative',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-        padding: '1.75rem'
-      }}>
-        {/* Close Button (only if user already logged in) */}
-        {localStorage.getItem('examfriend_token') && (
-          <button
-            onClick={onClose}
-            style={{
-              position: 'absolute',
-              top: '1rem',
-              right: '1rem',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'var(--text-muted)'
-            }}
-          >
-            <X size={20} />
-          </button>
-        )}
-
-        {/* Modal Header */}
-        <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-          <div style={{
-            width: '54px',
-            height: '54px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #6366f1 0%, #ec4899 100%)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#fff',
-            marginBottom: '0.75rem',
-            boxShadow: '0 8px 20px rgba(99, 102, 241, 0.35)'
-          }}>
-            {isSignup ? <UserPlus size={26} /> : <Phone size={26} />}
-          </div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '0.25rem' }}>
-            {isSignup ? 'Student Sign Up' : 'Welcome to EXAMFRIEND'}
-          </h2>
-          <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', margin: 0 }}>
-            {isSignup 
-              ? 'Enter your name & phone number to create your account' 
-              : 'Log in with your phone number and OTP'}
-          </p>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.35rem',
-            marginTop: '0.4rem',
-            padding: '0.15rem 0.55rem',
-            borderRadius: '12px',
-            background: 'rgba(16, 185, 129, 0.1)',
-            color: '#059669',
-            fontSize: '0.72rem',
-            fontWeight: 700
-          }}>
-            <ShieldCheck size={13} />
-            Stay signed in for 2 weeks automatically
-          </div>
-        </div>
-
-        {/* Auth Method Tabs: Phone (Default) vs Email */}
+      <div 
+        className="card auth-card"
+        style={{
+          width: '100%',
+          maxWidth: '560px',
+          background: 'var(--bg-card)',
+          borderRadius: 'var(--radius-xl)',
+          border: '1px solid var(--border-light)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+          overflow: 'hidden',
+          animation: 'fadeIn 0.25s ease-out',
+          margin: 'auto'
+        }}
+      >
+        {/* Header Banner */}
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '0.4rem',
-          background: 'var(--bg-subtle, rgba(0,0,0,0.04))',
-          padding: '0.3rem',
-          borderRadius: 'var(--radius-sm, 8px)',
-          marginBottom: '1.25rem'
+          background: 'var(--grad-hero)',
+          padding: '1.5rem 1.75rem 1.25rem',
+          color: '#fff',
+          position: 'relative'
         }}>
-          <button
-            type="button"
-            onClick={() => { setAuthMethod('phone'); setError(''); setOtpSent(false); }}
-            style={{
-              padding: '0.45rem',
-              borderRadius: '6px',
-              border: 'none',
-              background: authMethod === 'phone' ? 'var(--bg-surface, #fff)' : 'transparent',
-              color: authMethod === 'phone' ? 'var(--primary, #6366f1)' : 'var(--text-muted)',
-              fontWeight: authMethod === 'phone' ? 800 : 600,
-              fontSize: '0.8rem',
-              cursor: 'pointer',
+          {onClose && (
+            <button 
+              onClick={onClose}
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                background: 'rgba(255, 255, 255, 0.2)',
+                border: 'none',
+                color: '#fff',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'var(--transition)'
+              }}
+              title="Close modal"
+            >
+              <X size={18} />
+            </button>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.4rem' }}>
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.25)',
+              padding: '0.4rem',
+              borderRadius: 'var(--radius-md)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.4rem',
-              boxShadow: authMethod === 'phone' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <Phone size={14} /> Phone + OTP
-          </button>
-          <button
-            type="button"
-            onClick={() => { setAuthMethod('email'); setError(''); }}
-            style={{
-              padding: '0.45rem',
-              borderRadius: '6px',
-              border: 'none',
-              background: authMethod === 'email' ? 'var(--bg-surface, #fff)' : 'transparent',
-              color: authMethod === 'email' ? 'var(--primary, #6366f1)' : 'var(--text-muted)',
-              fontWeight: authMethod === 'email' ? 800 : 600,
-              fontSize: '0.8rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.4rem',
-              boxShadow: authMethod === 'email' ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <Mail size={14} /> Email & Password
-          </button>
+              justifyContent: 'center'
+            }}>
+              <GraduationCap size={22} color="#fff" />
+            </div>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.9 }}>
+              EXAMFRIEND Student Portal
+            </span>
+          </div>
+
+          <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: '0 0 0.35rem', letterSpacing: '-0.02em', color: '#fff' }}>
+            {activeTab === 'edit' 
+              ? 'Update Your Student Profile'
+              : activeTab === 'create'
+              ? 'Create Your Student Profile'
+              : 'Sync Profile on Another Device'}
+          </h2>
+          <p style={{ fontSize: '0.875rem', opacity: 0.92, margin: 0, lineHeight: 1.45 }}>
+            {activeTab === 'sync'
+              ? 'Using the app on your phone, tablet or another laptop? Fetch all your data instantly.'
+              : 'Zero passwords or complex signups. Just set up your profile and your entire dashboard unlocks!'}
+          </p>
+
+          {/* Navigation Tabs */}
+          <div style={{
+            display: 'flex',
+            gap: '0.5rem',
+            marginTop: '1.1rem',
+            background: 'rgba(0, 0, 0, 0.18)',
+            padding: '0.25rem',
+            borderRadius: 'var(--radius-lg)'
+          }}>
+            <button
+              type="button"
+              onClick={() => { setActiveTab('create'); setError(''); }}
+              style={{
+                flex: 1,
+                padding: '0.55rem',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                background: activeTab === 'create' ? '#fff' : 'transparent',
+                color: activeTab === 'create' ? 'var(--primary)' : 'rgba(255, 255, 255, 0.85)',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <User size={15} />
+              <span>Make Profile</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setActiveTab('sync'); setError(''); }}
+              style={{
+                flex: 1,
+                padding: '0.55rem',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                background: activeTab === 'sync' ? '#fff' : 'transparent',
+                color: activeTab === 'sync' ? 'var(--primary)' : 'rgba(255, 255, 255, 0.85)',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.4rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Smartphone size={15} />
+              <span>Fetch on Another Device</span>
+            </button>
+          </div>
         </div>
 
-        {/* Error Notice */}
-        {error && (
-          <div style={{
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#dc2626',
-            padding: '0.65rem 0.85rem',
-            borderRadius: 'var(--radius-sm, 6px)',
-            fontSize: '0.8rem',
-            marginBottom: '1rem',
-            lineHeight: 1.4
-          }}>
-            {error}
-          </div>
-        )}
+        {/* Modal Body */}
+        <div style={{ padding: '1.5rem 1.75rem', maxHeight: '72vh', overflowY: 'auto' }}>
+          
+          {/* Error Message */}
+          {error && (
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: 'var(--accent-rose)',
+              padding: '0.75rem 1rem',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
+              marginBottom: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}>
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+          )}
 
-        {/* Success Notice */}
-        {successMsg && (
-          <div style={{
-            background: 'rgba(16, 185, 129, 0.12)',
-            border: '1px solid rgba(16, 185, 129, 0.3)',
-            color: '#059669',
-            padding: '0.65rem 0.85rem',
-            borderRadius: 'var(--radius-sm, 6px)',
-            fontSize: '0.8rem',
-            marginBottom: '1rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            fontWeight: 600
-          }}>
-            <CheckCircle2 size={16} />
-            {successMsg}
-          </div>
-        )}
+          {/* Success Message */}
+          {successMsg && (
+            <div style={{
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: 'var(--accent-emerald)',
+              padding: '0.75rem 1rem',
+              borderRadius: 'var(--radius-md)',
+              fontSize: '0.85rem',
+              marginBottom: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}>
+              <CheckCircle2 size={16} />
+              <span>{successMsg}</span>
+            </div>
+          )}
 
-        {/* -------------------- METHOD 1: PHONE + OTP FORM -------------------- */}
-        {authMethod === 'phone' && (
-          <div>
-            {!otpSent ? (
-              // STEP 1: Enter Phone Number (and Name if Signup)
-              <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
-                {isSignup && (
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                      Full Name:
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <User size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                      <input
-                        type="text"
-                        required
-                        className="form-input"
-                        style={{ paddingLeft: '2.4rem', fontSize: '0.85rem' }}
-                        placeholder="e.g. Riya Gupta"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                    Mobile Phone Number:
-                  </label>
-                  <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                      padding: '0.5rem 0.75rem',
-                      background: 'var(--bg-subtle, rgba(0,0,0,0.05))',
-                      border: '1px solid var(--border-light, #e2e8f0)',
-                      borderRadius: 'var(--radius-sm, 6px)',
-                      fontSize: '0.85rem',
-                      fontWeight: 700,
-                      color: 'var(--text-secondary)'
-                    }}>
-                      🇮🇳 +91
-                    </div>
-                    <div style={{ position: 'relative', flex: 1 }}>
-                      <Phone size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                      <input
-                        type="tel"
-                        required
-                        maxLength={10}
-                        className="form-input"
-                        style={{ paddingLeft: '2.4rem', fontSize: '0.875rem', letterSpacing: '0.05rem', fontWeight: 600 }}
-                        placeholder="98765 43210"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading || phone.length < 10 || (isSignup && !name.trim())}
-                  className="btn btn-primary"
-                  style={{
-                    padding: '0.75rem',
-                    fontWeight: 700,
-                    fontSize: '0.9rem',
-                    marginTop: '0.4rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)'
-                  }}
-                >
-                  <KeyRound size={17} />
-                  {loading ? 'Sending OTP...' : 'Send Verification OTP'}
-                </button>
-              </form>
-            ) : (
-              // STEP 2: Enter 6-Digit OTP
-              <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div style={{
-                  background: 'var(--bg-subtle, rgba(0,0,0,0.03))',
-                  padding: '0.75rem',
-                  borderRadius: 'var(--radius-sm, 6px)',
-                  border: '1px solid var(--border-light)',
+          {/* TAB 1: MAKE PROFILE / EDIT PROFILE */}
+          {activeTab === 'create' && (
+            <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              
+              {/* Quick 1-Tap Demo Button */}
+              <button
+                type="button"
+                onClick={handleQuickDemo}
+                style={{
+                  background: 'var(--grad-subtle)',
+                  border: '1.5px dashed var(--primary)',
+                  padding: '0.65rem 0.85rem',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--primary)',
+                  fontSize: '0.825rem',
+                  fontWeight: 700,
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Mobile Number</div>
-                    <div style={{ fontSize: '0.875rem', fontWeight: 800 }}>+91 {phone}</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setOtpSent(false); setOtp(''); setError(''); }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--primary)',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      textDecoration: 'underline'
-                    }}
-                  >
-                    Change Number
-                  </button>
-                </div>
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  transition: 'var(--transition)'
+                }}
+              >
+                <Zap size={15} />
+                <span>⚡ Fill with Demo Student Data (Riya - B.Tech CS)</span>
+              </button>
 
-                {/* Instant OTP Display Banner (Zero SMS Friction) */}
-                {receivedOtp && (
-                  <div style={{
-                    padding: '0.65rem 0.85rem',
-                    borderRadius: '8px',
-                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(236, 72, 153, 0.12))',
-                    border: '1px solid rgba(99, 102, 241, 0.25)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '0.5rem'
-                  }}>
-                    <div>
-                      <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>Your Verification Code:</div>
-                      <div style={{ fontSize: '1.15rem', fontWeight: 900, color: 'var(--primary)', letterSpacing: '0.2rem' }}>
-                        {receivedOtp}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleAutoFillOtp}
-                      style={{
-                        padding: '0.35rem 0.65rem',
-                        borderRadius: '6px',
-                        border: '1px solid var(--primary)',
-                        background: 'var(--primary)',
-                        color: '#fff',
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.3rem'
-                      }}
-                    >
-                      {copiedOtp ? <Check size={13} /> : <Copy size={13} />}
-                      {copiedOtp ? 'Filled!' : '1-Tap Auto Fill'}
-                    </button>
-                  </div>
-                )}
-
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700, textAlign: 'center', display: 'block' }}>
-                    Enter 6-Digit Verification Code:
+              {/* Row 1: Name & Age */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: '0.75rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem' }}>
+                    <User size={14} color="var(--primary)" />
+                    <span>Student Full Name *</span>
                   </label>
                   <input
                     type="text"
                     required
-                    maxLength={6}
-                    autoFocus
-                    className="form-input"
+                    placeholder="e.g. Riya Sharma"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                     style={{
-                      textAlign: 'center',
-                      fontSize: '1.4rem',
-                      letterSpacing: '0.45rem',
-                      fontWeight: 800,
-                      padding: '0.65rem',
-                      color: 'var(--primary)'
+                      width: '100%',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-light)',
+                      background: 'var(--bg-subtle)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.9rem'
                     }}
-                    placeholder="••••••"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   />
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.775rem' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>
-                    Didn't receive code?
-                  </span>
-                  {resendCountdown > 0 ? (
-                    <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
-                      Resend in {resendCountdown}s
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleSendOtp}
-                      disabled={loading}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--primary)',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.25rem'
-                      }}
-                    >
-                      <RefreshCw size={12} /> Resend OTP
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading || otp.length < 6}
-                  className="btn btn-primary"
-                  style={{
-                    padding: '0.75rem',
-                    fontWeight: 700,
-                    fontSize: '0.9rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                    boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)'
-                  }}
-                >
-                  <ArrowRight size={17} />
-                  {loading ? 'Verifying...' : (isSignup ? 'Complete Sign Up' : 'Log In to Dashboard')}
-                </button>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* -------------------- METHOD 2: LEGACY EMAIL & PASSWORD -------------------- */}
-        {authMethod === 'email' && (
-          <form onSubmit={handleEmailSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-            {isSignup && (
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>Full Name:</label>
-                <div style={{ position: 'relative' }}>
-                  <User size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem' }}>
+                    <Calendar size={14} color="var(--primary)" />
+                    <span>Age</span>
+                  </label>
                   <input
-                    type="text"
-                    required
-                    className="form-input"
-                    style={{ paddingLeft: '2.4rem', fontSize: '0.85rem' }}
-                    placeholder="e.g. Riya Gupta"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    type="number"
+                    min="10"
+                    max="99"
+                    value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-light)',
+                      background: 'var(--bg-subtle)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.9rem'
+                    }}
                   />
                 </div>
               </div>
-            )}
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>Email Address:</label>
-              <div style={{ position: 'relative' }}>
-                <Mail size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              {/* Row 2: Email (Cross-Device Sync Key) */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem' }}>
+                  <Mail size={14} color="var(--primary)" />
+                  <span>Email Address *</span>
+                  <span style={{ fontSize: '0.7rem', fontWeight: 500, color: 'var(--text-muted)' }}>(Sync key for other devices)</span>
+                </label>
                 <input
                   type="email"
                   required
-                  className="form-input"
-                  style={{ paddingLeft: '2.4rem', fontSize: '0.85rem' }}
-                  placeholder="student@example.com"
+                  placeholder="e.g. riya@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-light)',
+                    background: 'var(--bg-subtle)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.9rem'
+                  }}
                 />
               </div>
-            </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 700 }}>Password:</label>
-              <div style={{ position: 'relative' }}>
-                <Lock size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              {/* Row 3: Studying In / Course / Branch */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem' }}>
+                  <BookOpen size={14} color="var(--primary)" />
+                  <span>Studying In / College / Class *</span>
+                </label>
                 <input
-                  type="password"
+                  type="text"
                   required
-                  className="form-input"
-                  style={{ paddingLeft: '2.4rem', fontSize: '0.85rem' }}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="e.g. B.Tech Computer Science - Sem 7, Class 12, etc."
+                  value={studyingIn}
+                  onChange={(e) => setStudyingIn(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-light)',
+                    background: 'var(--bg-subtle)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.9rem'
+                  }}
+                />
+
+                {/* Quick Presets for Course */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.4rem' }}>
+                  {['B.Tech / Engineering', 'Class 12 Boards', 'B.Sc / BCA', 'Medical / MBBS', 'Commerce / CA'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setStudyingIn(preset)}
+                      style={{
+                        padding: '0.2rem 0.55rem',
+                        fontSize: '0.72rem',
+                        borderRadius: 'var(--radius-full)',
+                        border: '1px solid var(--border-light)',
+                        background: studyingIn.includes(preset.split(' ')[0]) ? 'var(--primary-light)' : 'var(--bg-surface)',
+                        color: studyingIn.includes(preset.split(' ')[0]) ? 'var(--primary)' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Row 4: Daily Study Hours & Target Exam */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem' }}>
+                    <Clock size={14} color="var(--primary)" />
+                    <span>Daily Study Target</span>
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    {[2, 4, 6, 8].map(h => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => setStudyHours(h)}
+                        style={{
+                          flex: 1,
+                          padding: '0.45rem 0.2rem',
+                          borderRadius: 'var(--radius-md)',
+                          border: Number(studyHours) === h ? '2px solid var(--primary)' : '1px solid var(--border-light)',
+                          background: Number(studyHours) === h ? 'var(--primary-light)' : 'var(--bg-subtle)',
+                          color: Number(studyHours) === h ? 'var(--primary)' : 'var(--text-primary)',
+                          fontWeight: 700,
+                          fontSize: '0.85rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {h}h
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem' }}>
+                    <Target size={14} color="var(--primary)" />
+                    <span>Target Exam</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Semester Finals"
+                    value={targetExam}
+                    onChange={(e) => setTargetExam(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-light)',
+                      background: 'var(--bg-subtle)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.875rem'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Row 5: Mobile Phone (Optional) */}
+              <div className="form-group" style={{ margin: 0 }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.35rem' }}>
+                  <Phone size={14} color="var(--primary)" />
+                  <span>Mobile Phone Number</span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(Optional for SMS/WhatsApp study alerts)</span>
+                </label>
+                <input
+                  type="tel"
+                  placeholder="e.g. 9876543210"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-light)',
+                    background: 'var(--bg-subtle)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.9rem'
+                  }}
                 />
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn btn-primary"
-              style={{ padding: '0.75rem', fontWeight: 700, fontSize: '0.9rem', marginTop: '0.4rem' }}
-            >
-              {loading ? 'Authenticating...' : (isSignup ? 'Create Account' : 'Sign In')}
-            </button>
-          </form>
-        )}
-
-        {/* Quick Demo Access (1-Click Instant Login) */}
-        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-light)' }}>
-          <button
-            type="button"
-            onClick={handleQuickDemoLogin}
-            disabled={loading}
-            className="btn btn-secondary"
-            style={{
-              width: '100%',
-              padding: '0.6rem',
-              fontSize: '0.825rem',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(236, 72, 153, 0.08))',
-              border: '1px solid rgba(99, 102, 241, 0.25)',
-              color: 'var(--primary)'
-            }}
-          >
-            <Sparkles size={16} />
-            ⚡ 1-Tap Demo Student Login (No typing needed)
-          </button>
-        </div>
-
-        {/* Toggle between Login and Signup */}
-        <div style={{ textAlign: 'center', marginTop: '1rem', fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
-          {isSignup ? (
-            <span>
-              Already have an account?{' '}
+              {/* Submit Button */}
               <button
-                type="button"
-                onClick={() => { setIsSignup(false); setError(''); setOtpSent(false); }}
-                style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
-              >
-                Log In Here
-              </button>
-            </span>
-          ) : (
-            <span>
-              New student to EXAMFRIEND?{' '}
-              <button
-                type="button"
-                onClick={() => { setIsSignup(true); setError(''); setOtpSent(false); }}
-                style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}
-              >
-                Create Account (Sign Up)
-              </button>
-            </span>
-          )}
-        </div>
-
-        {/* Server Connection URL Drawer for Mobile APK */}
-        <div style={{ marginTop: '1.25rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-light)', textAlign: 'center' }}>
-          <button
-            type="button"
-            onClick={() => setShowServerSettings(!showServerSettings)}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
-          >
-            ⚙️ {showServerSettings ? 'Hide Server Settings' : 'App Server Settings (Cloudflare / Render URL)'}
-          </button>
-          {showServerSettings && (
-            <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'var(--bg-subtle, rgba(0,0,0,0.03))', borderRadius: 'var(--radius-sm, 6px)', textAlign: 'left' }}>
-              <label style={{ fontSize: '0.725rem', fontWeight: 700, display: 'block', marginBottom: '0.25rem' }}>
-                Active Backend Server URL:
-              </label>
-              <input
-                type="url"
-                className="form-input"
-                style={{ fontSize: '0.75rem', padding: '0.35rem 0.6rem', marginBottom: '0.5rem' }}
-                value={serverUrl}
-                onChange={(e) => setServerUrl(e.target.value)}
-                placeholder="https://your-service.onrender.com"
-              />
-              <button
-                type="button"
-                onClick={handleSaveServerUrl}
+                type="submit"
+                disabled={loading}
                 className="btn btn-primary"
-                style={{ fontSize: '0.7rem', padding: '0.25rem 0.65rem' }}
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  fontSize: '1rem',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  boxShadow: '0 8px 20px var(--primary-glow)',
+                  marginTop: '0.5rem'
+                }}
               >
-                Save & Connect
+                {loading ? (
+                  <>
+                    <RefreshCw size={18} className="animate-spin" />
+                    <span>Saving Profile & Entering Dashboard...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={18} />
+                    <span>Save Profile & Open Dashboard</span>
+                    <ArrowRight size={18} />
+                  </>
+                )}
               </button>
+
+              <div style={{ textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                🔒 Zero password hassles. Your profile stays saved on this device for 30 days!
+              </div>
+            </form>
+          )}
+
+          {/* TAB 2: FETCH ON ANOTHER DEVICE (CROSS-DEVICE SYNC) */}
+          {activeTab === 'sync' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              
+              {/* Informational Banner */}
+              <div style={{
+                background: 'var(--bg-subtle)',
+                border: '1px solid var(--border-light)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '1rem',
+                display: 'flex',
+                gap: '0.75rem',
+                alignItems: 'flex-start'
+              }}>
+                <div style={{
+                  background: 'var(--primary-light)',
+                  color: 'var(--primary)',
+                  padding: '0.4rem',
+                  borderRadius: 'var(--radius-md)',
+                  flexShrink: 0
+                }}>
+                  <Laptop size={20} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                    Seamless Cross-Device Synchronization
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                    Enter the email address you used on your laptop or phone. All your exams, subjects, notes, and study plans will be loaded onto this device immediately.
+                  </div>
+                </div>
+              </div>
+
+              {/* Fetch Form */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <label style={{ fontSize: '0.825rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Enter Your Profile Email Address:
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    placeholder="e.g. riya@gmail.com (or student name)"
+                    value={syncQuery}
+                    onChange={(e) => setSyncQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleFetchProfile(); }}
+                    style={{
+                      flex: 1,
+                      padding: '0.7rem 0.85rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-light)',
+                      background: 'var(--bg-subtle)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.9rem'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleFetchProfile()}
+                    disabled={loading || !syncQuery.trim()}
+                    className="btn btn-primary"
+                    style={{
+                      padding: '0.7rem 1.25rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}
+                  >
+                    {loading ? <RefreshCw size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                    <span>Fetch Data</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Sync Summary (When Found) */}
+              {syncedSummary && (
+                <div style={{
+                  background: 'rgba(16, 185, 129, 0.1)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.85rem',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '0.5rem',
+                  textAlign: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-emerald)' }}>{syncedSummary.subjects || 0}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Subjects</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-amber)' }}>{syncedSummary.exams || 0}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Exams</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-cyan)' }}>{syncedSummary.plans || 0}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Study Plans</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-purple)' }}>{syncedSummary.notes || 0}</div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Notes</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Available Profiles (1-Click Sync) */}
+              {availableProfiles.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
+                    Or 1-Tap To Load Existing Profile:
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto' }}>
+                    {availableProfiles.map((p) => (
+                      <div
+                        key={p.id}
+                        onClick={() => handleFetchProfile(p.email || p.name)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.65rem 0.85rem',
+                          background: 'var(--bg-subtle)',
+                          border: '1px solid var(--border-light)',
+                          borderRadius: 'var(--radius-md)',
+                          cursor: 'pointer',
+                          transition: 'var(--transition)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <div style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            background: 'var(--grad-accent)',
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            fontSize: '0.85rem'
+                          }}>
+                            {p.name ? p.name[0].toUpperCase() : 'S'}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                              {p.name}
+                            </div>
+                            <div style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>
+                              {p.studying_in || 'Student'} • {p.email}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 700 }}>
+                          <span>Sync</span>
+                          <ChevronRight size={14} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ textAlign: 'center', paddingTop: '0.5rem' }}>
+                <span style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>Don't have a profile yet? </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('create')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--primary)',
+                    fontWeight: 700,
+                    fontSize: '0.825rem',
+                    cursor: 'pointer',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  Create New Profile
+                </button>
+              </div>
+
             </div>
           )}
+
         </div>
       </div>
     </div>
